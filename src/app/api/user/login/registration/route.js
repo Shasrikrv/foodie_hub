@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import pool from "@/app/lib/db";
-import { insertUser } from "./userService";
 import { hash } from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -71,10 +70,11 @@ export async function POST(req) {
     }
 
     const hashedPassword = await hash(password, 12);
-    console.log("password from DB", password);
     const userId = uuidv4();
-    const command = `INSERT INTO users (user_id,first_name, last_name,email,password) VALUES ('${userId}', '${firstName}', '${lastName}', '${email}', '${hashedPassword}')`;
-    await pool.query(command);
+    await pool.execute(
+      "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?)",
+      [userId, firstName, lastName, email, hashedPassword]
+    );
 
     return NextResponse.json(
       { message: "User registered successfully" },

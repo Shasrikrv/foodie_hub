@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.1.6",
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
     "mysql": "^2.18.1",
@@ -26,6 +27,6 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.3.0",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4.1.6"
   }
 }

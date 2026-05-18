@@ -8,7 +8,6 @@ import pool from "@/app/lib/db";
 export const authOptions = {
   providers: [
     CredentialsProvider({
-      id: "Credentials",
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
