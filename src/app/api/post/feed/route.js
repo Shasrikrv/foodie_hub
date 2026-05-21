@@ -17,6 +17,7 @@ export async function GET() {
         p.title,
         p.createDate,
         p.image_url,
+        COALESCE(p.visibility, 'everyone') AS visibility,
         c.content_id,
         c.mealName,
         n.calories, n.protein, n.carbohydrates AS carbs, n.fats, n.fiber,
@@ -38,8 +39,18 @@ export async function GET() {
       JOIN users u ON u.user_id = p.user_id
       LEFT JOIN nutrition n ON n.content_id = c.content_id
       LEFT JOIN mealType mt ON mt.content_id = c.content_id
+      WHERE (
+        COALESCE(p.visibility, 'everyone') = 'everyone'
+        OR p.user_id = ?
+        OR EXISTS(
+          SELECT 1 FROM friend_request fr
+          WHERE fr.status = 2
+          AND ((fr.sender_id = p.user_id AND fr.receiver_id = ?)
+            OR (fr.receiver_id = p.user_id AND fr.sender_id = ?))
+        )
+      )
       ORDER BY is_priority DESC, COALESCE(p.createDate, '2000-01-01') DESC`,
-      [userId, userId, userId, userId]
+      [userId, userId, userId, userId, userId, userId, userId]
     );
 
     if (posts.length === 0) {

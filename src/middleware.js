@@ -1,6 +1,13 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+const PUBLIC_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/registration",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+];
+
 export default withAuth(
   function middleware(req) {
     if (req.nextauth.token && req.nextUrl.pathname === "/") {
@@ -10,13 +17,12 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        if (req.nextUrl.pathname === "/") return true;
+        const { pathname } = req.nextUrl;
+        if (pathname === "/" || PUBLIC_AUTH_PATHS.some((p) => pathname.startsWith(p))) return true;
         return !!token;
       },
     },
-    pages: {
-      signIn: "/",
-    },
+    pages: { signIn: "/" },
   }
 );
 

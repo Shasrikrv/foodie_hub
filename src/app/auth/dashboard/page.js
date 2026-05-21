@@ -22,15 +22,60 @@ function Avatar({ first, last, size = "md" }) {
   );
 }
 
+// Returns the right button for a given relationship state
+function RelationshipButton({ relationship, onAdd, onAccept, loading }) {
+  if (relationship === "friends") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        Following
+      </span>
+    );
+  }
+  if (relationship === "pending_sent") {
+    return (
+      <span className="text-xs font-semibold text-stone-400 bg-stone-100 px-4 py-2 rounded-full border border-stone-200 cursor-default">
+        Requested
+      </span>
+    );
+  }
+  if (relationship === "pending_received") {
+    return (
+      <button
+        onClick={onAccept}
+        disabled={loading}
+        className="text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white px-4 py-2 rounded-full transition-colors shadow-sm"
+      >
+        Accept Request
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onAdd}
+      disabled={loading}
+      className="text-xs font-semibold bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white px-4 py-2 rounded-full transition-colors shadow-sm"
+    >
+      {loading ? "..." : "Add Friend"}
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [friends, setFriends] = useState([]);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [sentIds, setSentIds] = useState(new Set());
   const [searchDone, setSearchDone] = useState(false);
+  const [actionLoading, setActionLoading] = useState({});
 
   useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = () => {
     Promise.all([
       fetch("/api/connections/authorize").then((r) => r.json()),
       fetch("/api/connections/friendsData").then((r) => r.json()),
@@ -38,7 +83,7 @@ export default function Dashboard() {
       setIncomingRequests(Array.isArray(authData.data) ? authData.data : []);
       setFriends(Array.isArray(friendData.data) ? friendData.data : []);
     });
-  }, []);
+  };
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -48,21 +93,47 @@ export default function Dashboard() {
     setSearchDone(true);
   };
 
-  const sendRequest = async (targetUserId) => {
+  const setLoading = (userId, val) =>
+    setActionLoading((prev) => ({ ...prev, [userId]: val }));
+
+  const updateRelationship = (userId, rel) =>
+    setSearchResults((prev) =>
+      prev.map((u) => (u.user_id === userId ? { ...u, relationship: rel } : u))
+    );
+
+  const sendRequest = async (user) => {
+    setLoading(user.user_id, true);
     const res = await fetch("/api/connections/friendrequest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetUserId }),
+      body: JSON.stringify({ targetUserId: user.user_id }),
     });
     const data = await res.json();
+    setLoading(user.user_id, false);
     if (res.ok) {
-      setSentIds((prev) => new Set([...prev, targetUserId]));
+      updateRelationship(user.user_id, "pending_sent");
     } else {
       alert(data.error || "Could not send request");
     }
   };
 
-  const handleAuthorization = async (requestId, status) => {
+  // Accept a request that showed up in search results (pending_received)
+  const acceptFromSearch = async (user) => {
+    // find the request_id from incomingRequests
+    const req = incomingRequests.find((r) => r.user_id === user.user_id);
+    if (!req) {
+      // re-fetch incoming to find it
+      const res = await fetch("/api/connections/authorize").then((r) => r.json());
+      const requests = Array.isArray(res.data) ? res.data : [];
+      setIncomingRequests(requests);
+      const found = requests.find((r) => r.user_id === user.user_id);
+      if (found) return handleAuthorization(found.request_id, 2, user.user_id);
+      return;
+    }
+    handleAuthorization(req.request_id, 2, user.user_id);
+  };
+
+  const handleAuthorization = async (requestId, status, fromSearchUserId = null) => {
     const res = await fetch("/api/connections/authorize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,9 +143,12 @@ export default function Dashboard() {
     if (!data.error) {
       setIncomingRequests((prev) => prev.filter((r) => r.request_id !== requestId));
       if (status === 2) {
+        // accepted — refresh friends list
         fetch("/api/connections/friendsData")
           .then((r) => r.json())
           .then((d) => setFriends(Array.isArray(d.data) ? d.data : []));
+        // update search result button if this came from search
+        if (fromSearchUserId) updateRelationship(fromSearchUserId, "friends");
       }
     } else {
       alert(data.error);
@@ -87,7 +161,7 @@ export default function Dashboard() {
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
 
-        {/* Incoming requests badge banner */}
+        {/* Pending requests banner */}
         {incomingRequests.length > 0 && (
           <div className="bg-orange-500 text-white rounded-2xl px-5 py-4 flex items-center justify-between shadow-sm shadow-orange-200">
             <div>
@@ -125,7 +199,9 @@ export default function Dashboard() {
           </div>
 
           {searchDone && searchResults.length === 0 && (
-            <p className="text-sm text-stone-400 text-center py-4">No users found for &ldquo;{query}&rdquo;</p>
+            <p className="text-sm text-stone-400 text-center py-4">
+              No users found for &ldquo;{query}&rdquo;
+            </p>
           )}
 
           {searchResults.length > 0 && (
@@ -141,17 +217,12 @@ export default function Dashboard() {
                       <p className="text-xs text-stone-400">{user.email}</p>
                     </div>
                   </div>
-                  <button
-                    disabled={sentIds.has(user.user_id)}
-                    onClick={() => sendRequest(user.user_id)}
-                    className={`text-xs font-semibold px-4 py-2 rounded-full transition-colors ${
-                      sentIds.has(user.user_id)
-                        ? "bg-stone-100 text-stone-400 cursor-default"
-                        : "bg-blue-500 hover:bg-blue-600 text-white shadow-sm"
-                    }`}
-                  >
-                    {sentIds.has(user.user_id) ? "Request sent" : "Add Friend"}
-                  </button>
+                  <RelationshipButton
+                    relationship={user.relationship}
+                    loading={actionLoading[user.user_id]}
+                    onAdd={() => sendRequest(user)}
+                    onAccept={() => acceptFromSearch(user)}
+                  />
                 </li>
               ))}
             </ul>
@@ -219,9 +290,12 @@ export default function Dashboard() {
               {friends.map((friend) => (
                 <li key={friend.user_id} className="flex items-center gap-3 py-3">
                   <Avatar first={friend.first_name} last={friend.last_name} />
-                  <p className="text-sm font-semibold text-stone-800">
-                    {friend.first_name} {friend.last_name}
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold text-stone-800">
+                      {friend.first_name} {friend.last_name}
+                    </p>
+                    <p className="text-xs text-emerald-600 font-medium">Following</p>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -25,8 +25,9 @@ const createPost = async (postData) => {
   }
 
   const postId = uuidv4();
-  const command = `INSERT INTO posts (post_id, title, user_id, content_id, createDate, image_url) VALUES (?, ?, ?, ?, CURDATE(), ?)`;
-  const VALUES = [postId, postData.title, postData.userId, postData.contentId, postData.imageUrl ?? null];
+  const visibility = ["friends", "everyone"].includes(postData.visibility) ? postData.visibility : "everyone";
+  const command = `INSERT INTO posts (post_id, title, user_id, content_id, createDate, image_url, visibility) VALUES (?, ?, ?, ?, CURDATE(), ?, ?)`;
+  const VALUES = [postId, postData.title, postData.userId, postData.contentId, postData.imageUrl ?? null, visibility];
   const [result] = await pool.query(command, VALUES);
   return result;
 };
@@ -137,8 +138,13 @@ const ingredientsList = async (ingredientsData) => {
   if (!ingredientsData.quantity) invalidFields.push("quantity");
   if (!ingredientsData.unit) invalidFields.push("unit");
 
-  const allowedUnits = ["g", "ml", "cup", "tbsp", "teaspoons", "pcs"];
-  if (!allowedUnits.includes(ingredientsData.unit)) {
+  const allowedUnits = [
+    "g", "kg", "oz", "lb",
+    "ml", "l", "cup", "tbsp", "tsp", "teaspoons",
+    "pcs", "piece", "slice", "scoop", "cubes",
+    "pinch", "handful", "bunch", "can", "bottle",
+  ];
+  if (ingredientsData.unit && !allowedUnits.includes(ingredientsData.unit)) {
     invalidFields.push("unit (invalid)");
   }
 

@@ -3,8 +3,14 @@ import { useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import EmojiPicker from "@/app/components/EmojiPicker";
 
-const UNITS = ["g", "ml", "cup", "tbsp", "teaspoons", "pcs"];
+const UNITS = [
+  "g", "kg", "oz", "lb",
+  "ml", "l", "cup", "tbsp", "tsp", "teaspoons",
+  "pcs", "piece", "slice", "scoop", "cubes",
+  "pinch", "handful", "bunch", "can", "bottle",
+];
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "Smoothie"];
 
 const MEAL_GRADIENTS = {
@@ -45,8 +51,11 @@ export default function PostPage() {
   const [fiber, setFiber] = useState("");
   const [ingredients, setIngredients] = useState([{ name: "", quantity: "", unit: "g" }]);
   const [instructions, setInstructions] = useState([{ step: 1, description: "" }]);
+  const [visibility, setVisibility] = useState("everyone");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMsg, setAiMsg] = useState("");
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -66,6 +75,54 @@ export default function PostPage() {
 
   const updateInstruction = (idx, value) =>
     setInstructions((prev) => prev.map((ins, i) => (i === idx ? { ...ins, description: value } : ins)));
+
+  const handleAISuggest = async () => {
+    setAiLoading(true);
+    setAiMsg("");
+    setError("");
+    try {
+      let body;
+      const headers = {};
+      if (imageFile) {
+        const form = new FormData();
+        form.append("image", imageFile);
+        body = form;
+        // no Content-Type header — browser sets it with boundary for FormData
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({});
+      }
+      const res = await fetch("/api/ai/suggest", { method: "POST", headers, body });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 402) setError("Not enough AI credits. Contact admin for more.");
+        else setError(data.error || "AI suggestion failed");
+        return;
+      }
+      const s = data.suggestion;
+      if (s.title) setTitle(s.title);
+      if (s.mealName) setMealName(s.mealName);
+      if (s.mealCategory && MEAL_TYPES.includes(s.mealCategory)) setMealType(s.mealCategory);
+      // nutrition fields are at top level (normalized by API) or nested under s.nutrition
+      const n = s.nutrition || s;
+      if (n.calories != null) setCalories(String(n.calories));
+      if (n.protein != null) setProtein(String(n.protein));
+      if (n.carbs != null) setCarbs(String(n.carbs));
+      if (n.fats != null) setFats(String(n.fats));
+      if (n.fiber != null) setFiber(String(n.fiber));
+      if (s.ingredients?.length) {
+        setIngredients(s.ingredients.map((i) => ({ name: i.name || "", quantity: String(i.quantity || ""), unit: i.unit || "g" })));
+      }
+      if (s.instructions?.length) {
+        setInstructions(s.instructions.map((i, idx) => ({ step: i.step ?? idx + 1, description: i.description || "" })));
+      }
+      setAiMsg("Fields filled!");
+    } catch {
+      setError("AI request failed. Please try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handlePost = async () => {
     if (!session?.user?.id) return setError("You must be logged in.");
@@ -99,7 +156,7 @@ export default function PostPage() {
       await fetch("/api/post/userPost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, userId: session.user.id, contentId, imageUrl }),
+        body: JSON.stringify({ title, userId: session.user.id, contentId, imageUrl, visibility }),
       });
 
       // Nutrition (optional)
@@ -225,16 +282,41 @@ export default function PostPage() {
           />
         </div>
 
+        {/* AI Suggest — admin only */}
+        {session?.user?.isAdmin && (
+          <>
+            <button
+              type="button"
+              onClick={handleAISuggest}
+              disabled={aiLoading}
+              className="w-full bg-gradient-to-r from-violet-500 to-indigo-600 hover:opacity-90 disabled:opacity-60 text-white font-bold py-3.5 rounded-2xl transition-all shadow-sm text-sm flex items-center justify-center gap-2"
+            >
+              {aiLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Thinking…
+                </>
+              ) : (
+                <>✨ AI Suggest Recipe Details</>
+              )}
+            </button>
+            {aiMsg && <p className="text-violet-700 text-sm font-medium bg-violet-50 border border-violet-100 rounded-2xl px-4 py-3">{aiMsg}</p>}
+          </>
+        )}
+
         {/* Post details */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">
           <SectionHeader number="2" title="Recipe Details" />
           <div className="space-y-3">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Give your post a catchy title"
-              className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 bg-stone-50 focus:outline-none focus:border-orange-400 focus:bg-white transition-all text-sm"
-            />
+            <div className="relative flex items-center gap-2">
+              <EmojiPicker onSelect={(e) => setTitle((prev) => prev + e)} />
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Give your post a catchy title"
+                className="flex-1 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 bg-stone-50 focus:outline-none focus:border-orange-400 focus:bg-white transition-all text-sm"
+              />
+            </div>
             <input
               value={mealName}
               onChange={(e) => setMealName(e.target.value)}
@@ -243,7 +325,7 @@ export default function PostPage() {
             />
             <div>
               <p className="text-xs font-semibold text-stone-500 mb-2">Meal Category</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {MEAL_TYPES.map((t) => (
                   <button
                     key={t}
@@ -263,10 +345,39 @@ export default function PostPage() {
           </div>
         </div>
 
+        {/* Visibility */}
+        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">
+          <SectionHeader number="3" title="Who can see this?" subtitle="Control who sees your recipe" />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibility("everyone")}
+              className={`py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                visibility === "everyone"
+                  ? "bg-stone-800 text-white shadow-sm"
+                  : "bg-stone-50 border border-stone-200 text-stone-600 hover:border-stone-400"
+              }`}
+            >
+              <span>🌍</span> Everyone
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibility("friends")}
+              className={`py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                visibility === "friends"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "bg-stone-50 border border-stone-200 text-stone-600 hover:border-stone-400"
+              }`}
+            >
+              <span>🔒</span> Friends Only
+            </button>
+          </div>
+        </div>
+
         {/* Nutrition */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">
-          <SectionHeader number="3" title="Nutrition Info" subtitle="Optional — helps others track their macros" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <SectionHeader number="4" title="Nutrition Info" subtitle="Optional — helps others track their macros" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
               ["calories", calories, setCalories, "Calories (kcal)", "text-red-600 bg-red-50 border-red-100"],
               ["protein", protein, setProtein, "Protein (g)", "text-blue-600 bg-blue-50 border-blue-100"],
@@ -293,7 +404,7 @@ export default function PostPage() {
 
         {/* Ingredients */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">
-          <SectionHeader number="4" title="Ingredients" />
+          <SectionHeader number="5" title="Ingredients" />
           <div className="space-y-2.5">
             {ingredients.map((ing, idx) => (
               <div key={idx} className="flex gap-2 items-center">
@@ -342,7 +453,7 @@ export default function PostPage() {
 
         {/* Instructions */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">
-          <SectionHeader number="5" title="Instructions" subtitle="Walk readers through each step" />
+          <SectionHeader number="6" title="Instructions" subtitle="Walk readers through each step" />
           <div className="space-y-3">
             {instructions.map((inst, idx) => (
               <div key={idx} className="flex gap-3 items-start">
