@@ -23,15 +23,21 @@ function Avatar({ first, last, size = "md" }) {
 }
 
 // Returns the right button for a given relationship state
-function RelationshipButton({ relationship, onAdd, onAccept, loading }) {
+function RelationshipButton({ relationship, onAdd, onAccept, onUnfollow, loading }) {
   if (relationship === "friends") {
     return (
-      <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200">
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+      <button
+        onClick={onUnfollow}
+        disabled={loading}
+        className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-red-50 hover:text-red-500 hover:border-red-200 disabled:opacity-60 px-4 py-2 rounded-full border border-emerald-200 transition-all group"
+        title="Click to unfollow"
+      >
+        <svg className="w-3.5 h-3.5 group-hover:hidden" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
-        Following
-      </span>
+        <span className="group-hover:hidden">{loading ? "…" : "Following"}</span>
+        <span className="hidden group-hover:inline">{loading ? "…" : "Unfollow"}</span>
+      </button>
     );
   }
   if (relationship === "pending_sent") {
@@ -100,6 +106,23 @@ export default function Dashboard() {
     setSearchResults((prev) =>
       prev.map((u) => (u.user_id === userId ? { ...u, relationship: rel } : u))
     );
+
+  const handleUnfollow = async (targetUserId) => {
+    setLoading(targetUserId, true);
+    const res = await fetch("/api/connections/unfollow", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId }),
+    });
+    setLoading(targetUserId, false);
+    if (res.ok) {
+      setFriends((prev) => prev.filter((f) => f.user_id !== targetUserId));
+      updateRelationship(targetUserId, null);
+    } else {
+      const data = await res.json();
+      alert(data.error || "Could not unfollow");
+    }
+  };
 
   const sendRequest = async (user) => {
     setLoading(user.user_id, true);
@@ -222,6 +245,7 @@ export default function Dashboard() {
                     loading={actionLoading[user.user_id]}
                     onAdd={() => sendRequest(user)}
                     onAccept={() => acceptFromSearch(user)}
+                    onUnfollow={() => handleUnfollow(user.user_id)}
                   />
                 </li>
               ))}
@@ -288,14 +312,23 @@ export default function Dashboard() {
           ) : (
             <ul className="divide-y divide-stone-100">
               {friends.map((friend) => (
-                <li key={friend.user_id} className="flex items-center gap-3 py-3">
-                  <Avatar first={friend.first_name} last={friend.last_name} />
-                  <div>
-                    <p className="text-sm font-semibold text-stone-800">
-                      {friend.first_name} {friend.last_name}
-                    </p>
-                    <p className="text-xs text-emerald-600 font-medium">Following</p>
+                <li key={friend.user_id} className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar first={friend.first_name} last={friend.last_name} />
+                    <div>
+                      <p className="text-sm font-semibold text-stone-800">
+                        {friend.first_name} {friend.last_name}
+                      </p>
+                      <p className="text-xs text-emerald-600 font-medium">Following</p>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => handleUnfollow(friend.user_id)}
+                    disabled={actionLoading[friend.user_id]}
+                    className="text-xs font-semibold text-stone-400 hover:text-red-500 bg-stone-50 hover:bg-red-50 border border-stone-200 hover:border-red-200 disabled:opacity-60 px-3 py-1.5 rounded-full transition-all"
+                  >
+                    {actionLoading[friend.user_id] ? "…" : "Unfollow"}
+                  </button>
                 </li>
               ))}
             </ul>

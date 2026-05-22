@@ -112,6 +112,7 @@ export default function NavBar() {
                   <p className="text-xs text-stone-400 truncate">{session?.user?.email}</p>
                 </div>
                 {[
+                  ["/auth/my-posts", "📖 My Recipes"],
                   ["/auth/settings", "⚙️ Settings"],
                   ["/auth/dashboard", "👥 Friends"],
                   ["/auth/chat", "💬 Messages"],
