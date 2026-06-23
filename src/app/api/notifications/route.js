@@ -7,14 +7,14 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT n.notification_id, n.type, n.post_id, n.is_read, n.created_at,
               u.first_name, u.last_name, u.profile_pic,
               p.title AS post_title
        FROM notifications n
        JOIN users u ON u.user_id = n.from_user_id
        LEFT JOIN posts p ON p.post_id = n.post_id
-       WHERE n.user_id = ?
+       WHERE n.user_id = $1
        ORDER BY n.created_at DESC
        LIMIT 50`,
       [session.user.id]
@@ -35,7 +35,7 @@ export async function POST(req) {
 
     const { action } = await req.json();
     if (action === "markAllRead") {
-      await pool.query("UPDATE notifications SET is_read = 1 WHERE user_id = ?", [session.user.id]);
+      await pool.query("UPDATE notifications SET is_read = TRUE WHERE user_id = $1", [session.user.id]);
       return Response.json({ success: true });
     }
     return Response.json({ error: "Unknown action" }, { status: 400 });

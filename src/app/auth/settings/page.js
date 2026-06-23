@@ -4,6 +4,41 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import NavBar from "../components/NavBar";
 
+function DeleteAccountModal({ onConfirm, onClose, loading }) {
+  const [typed, setTyped] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center text-2xl mb-4 mx-auto">⚠️</div>
+          <h3 className="font-black text-stone-800 text-xl mb-2 text-center">Delete Account</h3>
+          <p className="text-sm text-stone-500 text-center mb-4">
+            This permanently deletes your account, all your posts, recipes, and data. <span className="font-semibold text-stone-700">This cannot be undone.</span>
+          </p>
+          <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-5">
+            <p className="text-xs text-red-600 font-semibold mb-2">Type <span className="font-black">DELETE</span> to confirm:</p>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="DELETE"
+              className="w-full bg-white border border-red-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:outline-none focus:border-red-400 transition-all"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-500 text-sm font-semibold hover:bg-stone-50 transition-colors">Cancel</button>
+            <button
+              onClick={onConfirm}
+              disabled={typed !== "DELETE" || loading}
+              className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold transition-colors">
+              {loading ? "Deleting…" : "Delete Forever"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -27,6 +62,10 @@ export default function SettingsPage() {
   const [supportMsg, setSupportMsg] = useState("");
   const [supportSent, setSupportSent] = useState(false);
   const [supportTab, setSupportTab] = useState(false);
+
+  // Account deletion
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -106,6 +145,19 @@ export default function SettingsPage() {
     if (res.ok) { setSupportSent(true); setSupportSubject(""); setSupportMsg(""); }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    const res = await fetch("/api/user/account", { method: "DELETE" });
+    if (res.ok) {
+      await signOut({ callbackUrl: "/" });
+    } else {
+      const data = await res.json();
+      setError(data.error || "Failed to delete account");
+      setDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
   if (profileLoading || (!profile && !profileError)) return (
     <div className="min-h-screen bg-stone-50 flex flex-col">
       <NavBar />
@@ -137,6 +189,13 @@ export default function SettingsPage() {
   return (
     <div className="bg-stone-50 min-h-screen">
       <NavBar />
+      {showDeleteModal && (
+        <DeleteAccountModal
+          onConfirm={handleDeleteAccount}
+          onClose={() => setShowDeleteModal(false)}
+          loading={deleting}
+        />
+      )}
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         <h1 className="font-black text-stone-800 text-2xl">Settings</h1>
 
@@ -236,14 +295,22 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Sign out */}
+        {/* Account section */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6">
           <h2 className="font-bold text-stone-800 mb-3">Account</h2>
           <p className="text-sm text-stone-500 mb-4">Signed in as <span className="font-semibold text-stone-700">{session?.user?.email}</span></p>
           <button onClick={() => signOut({ callbackUrl: "/" })}
-            className="w-full border border-red-200 text-red-500 hover:bg-red-50 font-semibold py-2.5 rounded-xl text-sm transition-colors">
+            className="w-full border border-stone-200 text-stone-600 hover:bg-stone-50 font-semibold py-2.5 rounded-xl text-sm transition-colors mb-3">
             Sign Out
           </button>
+          <div className="border-t border-stone-100 pt-4">
+            <p className="text-xs text-stone-400 mb-3">Danger zone</p>
+            <button onClick={() => setShowDeleteModal(true)}
+              className="w-full border border-red-200 text-red-500 hover:bg-red-50 font-semibold py-2.5 rounded-xl text-sm transition-colors">
+              Delete My Account
+            </button>
+            <p className="text-xs text-stone-400 text-center mt-2">This permanently deletes your account and all data.</p>
+          </div>
         </div>
       </div>
     </div>

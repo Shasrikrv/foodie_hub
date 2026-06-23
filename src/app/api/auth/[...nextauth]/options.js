@@ -20,7 +20,7 @@ export const authOptions = {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Email and password required");
         }
-        const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [credentials.email]);
+        const { rows } = await pool.query("SELECT * FROM users WHERE email = $1", [credentials.email]);
         const user = rows[0];
         if (!user) throw new Error("Email not found");
         const isPasswordValid = await compare(credentials.password, user.password);
@@ -39,14 +39,14 @@ export const authOptions = {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         try {
-          const [rows] = await pool.query("SELECT user_id FROM users WHERE email = ?", [user.email]);
+          const { rows } = await pool.query("SELECT user_id FROM users WHERE email = $1", [user.email]);
           if (rows.length === 0) {
             const userId = uuidv4();
             const parts = (user.name || "").trim().split(" ");
             const firstName = parts[0] || "User";
             const lastName = parts.slice(1).join(" ") || "";
             await pool.query(
-              "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?)",
+              "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES ($1, $2, $3, $4, $5)",
               [userId, firstName, lastName, user.email, ""]
             );
           }
@@ -57,11 +57,10 @@ export const authOptions = {
       }
       return true;
     },
-    async jwt({ token, user, account, trigger, session: updateData }) {
-      // Re-sync from DB whenever triggered by client update() call
+    async jwt({ token, user, account, trigger }) {
       if (trigger === "update" && token.id) {
-        const [rows] = await pool.query(
-          "SELECT first_name, last_name, is_admin, profile_pic FROM users WHERE user_id = ?",
+        const { rows } = await pool.query(
+          "SELECT first_name, last_name, is_admin, profile_pic FROM users WHERE user_id = $1",
           [token.id]
         );
         if (rows[0]) {
@@ -78,9 +77,8 @@ export const authOptions = {
           token.isAdmin = user.isAdmin;
           token.profilePic = user.profilePic;
         } else {
-          // Google provider — look up user by email
-          const [rows] = await pool.query(
-            "SELECT user_id, is_admin, profile_pic, first_name, last_name FROM users WHERE email = ?",
+          const { rows } = await pool.query(
+            "SELECT user_id, is_admin, profile_pic, first_name, last_name FROM users WHERE email = $1",
             [token.email]
           );
           if (rows[0]) {

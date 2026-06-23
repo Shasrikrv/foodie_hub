@@ -11,8 +11,8 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin FROM users WHERE user_id = ?",
+    const { rows } = await pool.query(
+      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin FROM users WHERE user_id = $1",
       [session.user.id]
     );
     if (!rows[0]) return Response.json({ error: "Not found" }, { status: 404 });
@@ -30,7 +30,6 @@ export async function PUT(req) {
     const contentType = req.headers.get("content-type") || "";
 
     if (contentType.includes("multipart/form-data")) {
-      // Profile picture upload
       const form = await req.formData();
       const file = form.get("avatar");
       if (!file) return Response.json({ error: "No file" }, { status: 400 });
@@ -45,23 +44,22 @@ export async function PUT(req) {
       await writeFile(join(uploadDir, filename), Buffer.from(bytes));
       const url = `/uploads/avatars/${filename}`;
 
-      await pool.query("UPDATE users SET profile_pic = ? WHERE user_id = ?", [url, session.user.id]);
+      await pool.query("UPDATE users SET profile_pic = $1 WHERE user_id = $2", [url, session.user.id]);
       return Response.json({ url });
     }
 
-    // JSON update (name, bio, password)
     const { firstName, lastName, bio, currentPassword, newPassword } = await req.json();
 
     if (newPassword) {
-      const [rows] = await pool.query("SELECT password FROM users WHERE user_id = ?", [session.user.id]);
+      const { rows } = await pool.query("SELECT password FROM users WHERE user_id = $1", [session.user.id]);
       const valid = await compare(currentPassword || "", rows[0]?.password || "");
       if (!valid) return Response.json({ error: "Current password is incorrect" }, { status: 400 });
       const hashed = await hash(newPassword, 12);
-      await pool.query("UPDATE users SET password = ? WHERE user_id = ?", [hashed, session.user.id]);
+      await pool.query("UPDATE users SET password = $1 WHERE user_id = $2", [hashed, session.user.id]);
     }
 
     await pool.query(
-      "UPDATE users SET first_name = ?, last_name = ?, bio = ? WHERE user_id = ?",
+      "UPDATE users SET first_name = $1, last_name = $2, bio = $3 WHERE user_id = $4",
       [firstName?.trim() || "", lastName?.trim() || "", bio?.trim() || null, session.user.id]
     );
 

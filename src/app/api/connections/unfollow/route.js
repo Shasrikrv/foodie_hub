@@ -19,7 +19,7 @@ export async function DELETE(req) {
     await pool.query(
       `DELETE FROM friend_request
        WHERE status = 2
-       AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))`,
+       AND ((sender_id = $1 AND receiver_id = $2) OR (sender_id = $3 AND receiver_id = $4))`,
       [userId, targetUserId, targetUserId, userId]
     );
 

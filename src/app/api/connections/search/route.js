@@ -19,7 +19,7 @@ export async function GET(req) {
     const me = session.user.id;
     const like = `%${query}%`;
 
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT
         u.user_id, u.first_name, u.last_name, u.email,
         CASE
@@ -30,15 +30,15 @@ export async function GET(req) {
         END AS relationship
       FROM users u
       LEFT JOIN friend_request fr_sent
-        ON fr_sent.sender_id = ? AND fr_sent.receiver_id = u.user_id AND fr_sent.status = 1
+        ON fr_sent.sender_id = $1 AND fr_sent.receiver_id = u.user_id AND fr_sent.status = 1
       LEFT JOIN friend_request fr_recv
-        ON fr_recv.receiver_id = ? AND fr_recv.sender_id = u.user_id AND fr_recv.status = 1
+        ON fr_recv.receiver_id = $2 AND fr_recv.sender_id = u.user_id AND fr_recv.status = 1
       LEFT JOIN friend_request fr_friend
         ON fr_friend.status = 2
-        AND ((fr_friend.sender_id = ? AND fr_friend.receiver_id = u.user_id)
-          OR (fr_friend.receiver_id = ? AND fr_friend.sender_id = u.user_id))
-      WHERE (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)
-        AND u.user_id != ?`,
+        AND ((fr_friend.sender_id = $3 AND fr_friend.receiver_id = u.user_id)
+          OR (fr_friend.receiver_id = $4 AND fr_friend.sender_id = u.user_id))
+      WHERE (u.first_name ILIKE $5 OR u.last_name ILIKE $6 OR u.email ILIKE $7)
+        AND u.user_id != $8`,
       [me, me, me, me, like, like, like, me]
     );
 

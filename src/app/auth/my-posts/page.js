@@ -251,6 +251,8 @@ export default function MyPostsPage() {
   const [editingPost, setEditingPost] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editingComment, setEditingComment] = useState(null); // { commentId, text, postId }
+  const [openCommentMenu, setOpenCommentMenu] = useState(null); // commentId
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -282,7 +284,7 @@ export default function MyPostsPage() {
   const loadComments = async (postId) => {
     const res = await fetch(`/api/post/comments?postId=${postId}`);
     const data = await res.json();
-    setComments((prev) => ({ ...prev, [postId]: data.data || [] }));
+    if (data.data) setComments((prev) => ({ ...prev, [postId]: data.data }));
   };
 
   const handleToggleComments = (postId) => {
@@ -291,14 +293,88 @@ export default function MyPostsPage() {
     if (opening) loadComments(postId);
   };
 
+  // Poll open comment sections every 7 seconds for real-time updates
+  useEffect(() => {
+    const openPostIds = Object.entries(expanded)
+      .filter(([, v]) => v?.comments)
+      .map(([k]) => k);
+    if (openPostIds.length === 0) return;
+    const interval = setInterval(() => {
+      openPostIds.forEach(async (postId) => {
+        const res = await fetch(`/api/post/comments?postId=${postId}`);
+        const data = await res.json();
+        if (data.data) setComments((prev) => ({ ...prev, [postId]: data.data }));
+      });
+    }, 7000);
+    return () => clearInterval(interval);
+  }, [expanded]);
+
   const handleCommentSubmit = async (postId) => {
     const text = commentText[postId]?.trim();
     if (!text) return;
-    const res = await fetch("/api/post/comments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ postId, commentText: text }) });
+
+    // Optimistic: show immediately
+    const nameParts = session?.user?.name?.split(" ") || [];
+    const optimistic = {
+      comment_id: `_opt_${Date.now()}`,
+      comment_text: text,
+      user_id: session?.user?.id,
+      first_name: nameParts[0] || "",
+      last_name: nameParts.slice(1).join(" ") || "",
+      profile_pic: session?.user?.profilePic || null,
+      _optimistic: true,
+    };
+    setComments((prev) => ({ ...prev, [postId]: [...(prev[postId] || []), optimistic] }));
+    setCommentText((prev) => ({ ...prev, [postId]: "" }));
+
+    const res = await fetch("/api/post/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, commentText: text }),
+    });
     if (res.ok) {
-      setCommentText((prev) => ({ ...prev, [postId]: "" }));
       await loadComments(postId);
-      setPosts((prev) => prev.map((p) => p.post_id === postId ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
+      setPosts((prev) => prev.map((p) =>
+        p.post_id === postId ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p
+      ));
+    } else {
+      setComments((prev) => ({ ...prev, [postId]: (prev[postId] || []).filter((c) => !c._optimistic) }));
+      setCommentText((prev) => ({ ...prev, [postId]: text }));
+    }
+  };
+
+  const handleCommentDelete = async (commentId, postId) => {
+    const res = await fetch("/api/post/comments", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentId }),
+    });
+    if (res.ok) {
+      setComments((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter((c) => c.comment_id !== commentId),
+      }));
+      setPosts((prev) => prev.map((p) =>
+        p.post_id === postId ? { ...p, comment_count: Math.max(0, (p.comment_count || 1) - 1) } : p
+      ));
+    }
+  };
+
+  const handleCommentEditSave = async (commentId, postId, newText) => {
+    if (!newText?.trim()) return;
+    const res = await fetch("/api/post/comments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentId, commentText: newText.trim() }),
+    });
+    if (res.ok) {
+      setComments((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).map((c) =>
+          c.comment_id === commentId ? { ...c, comment_text: newText.trim(), _edited: true } : c
+        ),
+      }));
+      setEditingComment(null);
     }
   };
 
@@ -570,17 +646,104 @@ export default function MyPostsPage() {
                     {(comments[post.post_id] || []).length === 0 ? (
                       <p className="text-xs text-stone-400 text-center py-3">No comments yet. Be the first!</p>
                     ) : (
-                      (comments[post.post_id] || []).map((c) => (
-                        <div key={c.comment_id} className="flex gap-2.5 items-start">
-                          <div className={`w-8 h-8 rounded-full ${avatarColor(c.first_name)} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                            {initials(c.first_name, c.last_name)}
+                      (comments[post.post_id] || []).map((c) => {
+                        const isMyComment = c.user_id === session?.user?.id;
+                        // myPosts API exposes the post author as author_id (not user_id)
+                        const isPostOwner = post.author_id === session?.user?.id;
+                        const canEdit = isMyComment && !c._optimistic;
+                        const canDelete = (isMyComment || isPostOwner) && !c._optimistic;
+                        const isEditing = editingComment?.commentId === c.comment_id;
+                        const menuOpen = openCommentMenu === c.comment_id;
+
+                        return (
+                          <div key={c.comment_id} className={`flex gap-2.5 items-start group ${c._optimistic ? "opacity-60" : ""}`}>
+                            {c.profile_pic ? (
+                              <img src={c.profile_pic} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 mt-0.5" />
+                            ) : (
+                              <div className={`w-8 h-8 rounded-full ${avatarColor(c.first_name)} flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5`}>
+                                {initials(c.first_name, c.last_name)}
+                              </div>
+                            )}
+
+                            {isEditing ? (
+                              <div className="flex-1">
+                                <input
+                                  autoFocus
+                                  value={editingComment.text}
+                                  onChange={(e) => setEditingComment((prev) => ({ ...prev, text: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleCommentEditSave(c.comment_id, post.post_id, editingComment.text);
+                                    if (e.key === "Escape") setEditingComment(null);
+                                  }}
+                                  className="w-full bg-white border border-orange-300 rounded-2xl px-4 py-2.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-orange-200 transition-all"
+                                />
+                                <div className="flex gap-2 mt-1.5 ml-1">
+                                  <button onClick={() => handleCommentEditSave(c.comment_id, post.post_id, editingComment.text)}
+                                    className="text-xs font-semibold text-white bg-orange-500 hover:bg-orange-400 px-3 py-1 rounded-full transition-colors">
+                                    Save
+                                  </button>
+                                  <button onClick={() => setEditingComment(null)}
+                                    className="text-xs font-semibold text-stone-400 hover:text-stone-600 px-3 py-1 rounded-full transition-colors">
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex-1 flex items-start gap-1 min-w-0">
+                                <div className="bg-white rounded-2xl px-4 py-2.5 text-sm flex-1 shadow-sm border border-stone-100 min-w-0">
+                                  <span className="font-semibold text-stone-800">{c.first_name} {c.last_name} </span>
+                                  <span className="text-stone-600 break-words">{c.comment_text}</span>
+                                  {c._edited && <span className="text-xs text-stone-300 ml-1">· edited</span>}
+                                  {c._optimistic && <span className="text-xs text-stone-300 ml-1">· sending…</span>}
+                                </div>
+
+                                {(canEdit || canDelete) && (
+                                  <div className="relative flex-shrink-0">
+                                    <button
+                                      onClick={() => setOpenCommentMenu(menuOpen ? null : c.comment_id)}
+                                      className="w-7 h-7 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-600 hover:bg-stone-100 active:bg-stone-200 transition-all mt-1"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <circle cx="4" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" />
+                                      </svg>
+                                    </button>
+
+                                    {menuOpen && (
+                                      <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setOpenCommentMenu(null)} />
+                                        <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-stone-100 py-1 z-20 min-w-[110px] overflow-hidden">
+                                          {canEdit && (
+                                            <button
+                                              onClick={() => { setEditingComment({ commentId: c.comment_id, text: c.comment_text, postId: post.post_id }); setOpenCommentMenu(null); }}
+                                              className="w-full text-left px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 flex items-center gap-2 transition-colors"
+                                            >
+                                              <svg className="w-3.5 h-3.5 text-stone-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                              </svg>
+                                              Edit
+                                            </button>
+                                          )}
+                                          {canDelete && (
+                                            <button
+                                              onClick={() => { handleCommentDelete(c.comment_id, post.post_id); setOpenCommentMenu(null); }}
+                                              className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                            >
+                                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                              </svg>
+                                              Delete
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="bg-white rounded-2xl px-4 py-2.5 text-sm flex-1 shadow-sm border border-stone-100">
-                            <span className="font-semibold text-stone-800">{c.first_name} {c.last_name} </span>
-                            <span className="text-stone-600">{c.comment_text}</span>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -13,7 +13,7 @@ export async function POST(req) {
     }
 
     await pool.query(
-      "INSERT INTO support_tickets (ticket_id, user_id, email, subject, message) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO support_tickets (ticket_id, user_id, email, subject, message) VALUES ($1, $2, $3, $4, $5)",
       [uuidv4(), session?.user?.id || null, email.trim(), subject.trim(), message.trim()]
     );
     return Response.json({ success: true });

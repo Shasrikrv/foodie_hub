@@ -14,35 +14,22 @@ const registerSchema = z.object({
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
     .regex(/[a-z]/, "Password must contain at least one lowercase letter")
     .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(
-      /[^A-Za-z0-9]/,
-      "Password must contain at least one special character"
-    ),
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
 });
 
 export async function GET() {
   try {
-    const [rows] = await pool.query("SELECT * FROM user ");
-    return Response.json({
-      data: rows,
-    });
+    const { rows } = await pool.query("SELECT * FROM users");
+    return Response.json({ data: rows });
   } catch (error) {
     console.error("Connection error:", error);
-    return Response.json(
-      {
-        message: "Database connection failed",
-        error: error.message,
-      },
-      { status: 500 }
-    );
+    return Response.json({ message: "Database connection failed", error: error.message }, { status: 500 });
   }
 }
 
 export async function POST(req) {
   try {
     const request = await req.json();
-    console.log(request);
-    // Validate request body against schema
     const result = registerSchema.safeParse(request);
 
     if (!result.success) {
@@ -50,49 +37,35 @@ export async function POST(req) {
         field: error.path[0],
         message: error.message,
       }));
-
       return NextResponse.json({ errors }, { status: 400 });
     }
 
     const { firstName, lastName, email, password } = result.data;
 
-    // Check if email already exists
-    const [existingUsers] = await pool.query(
-      "SELECT user_id FROM users WHERE email = ?",
+    const { rows: existingUsers } = await pool.query(
+      "SELECT user_id FROM users WHERE email = $1",
       [email]
     );
 
     if (existingUsers.length > 0) {
-      return NextResponse.json(
-        { error: "Email already exists" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email already exists" }, { status: 400 });
     }
 
     const hashedPassword = await hash(password, 12);
     const userId = uuidv4();
-    await pool.execute(
-      "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?)",
+    await pool.query(
+      "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES ($1, $2, $3, $4, $5)",
       [userId, firstName, lastName, email, hashedPassword]
     );
 
-    return NextResponse.json(
-      { message: "User registered successfully" },
-      { status: 201 }
-    );
+    return NextResponse.json({ message: "User registered successfully" }, { status: 201 });
   } catch (error) {
     console.error("Registration error:", error);
 
-    if (error.code === "ER_DUP_ENTRY") {
-      return NextResponse.json(
-        { error: "Email already exists" },
-        { status: 400 }
-      );
+    if (error.code === "23505") {
+      return NextResponse.json({ error: "Email already exists" }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { error: "An error occurred during registration" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "An error occurred during registration" }, { status: 500 });
   }
 }

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 async function notify(pool, { userId, fromUserId, type, postId }) {
   if (userId === fromUserId) return;
   await pool.query(
-    "INSERT INTO notifications (notification_id, user_id, from_user_id, type, post_id) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO notifications (notification_id, user_id, from_user_id, type, post_id) VALUES ($1, $2, $3, $4, $5)",
     [uuidv4(), userId, fromUserId, type, postId || null]
   ).catch(() => {});
 }
@@ -20,20 +20,19 @@ export async function POST(req) {
     if (!postId) return Response.json({ message: "postId is required" }, { status: 400 });
 
     const userId = session.user.id;
-    const [existing] = await pool.execute(
-      "SELECT like_id FROM likes WHERE user_id = ? AND post_id = ?",
+    const { rows: existing } = await pool.query(
+      "SELECT like_id FROM likes WHERE user_id = $1 AND post_id = $2",
       [userId, postId]
     );
 
     if (existing.length > 0) {
-      await pool.execute("DELETE FROM likes WHERE user_id = ? AND post_id = ?", [userId, postId]);
+      await pool.query("DELETE FROM likes WHERE user_id = $1 AND post_id = $2", [userId, postId]);
       return Response.json({ liked: false });
     }
 
-    await pool.execute("INSERT INTO likes (like_id, user_id, post_id) VALUES (?, ?, ?)", [uuidv4(), userId, postId]);
+    await pool.query("INSERT INTO likes (like_id, user_id, post_id) VALUES ($1, $2, $3)", [uuidv4(), userId, postId]);
 
-    // Notify post author
-    const [posts] = await pool.query("SELECT user_id FROM posts WHERE post_id = ?", [postId]);
+    const { rows: posts } = await pool.query("SELECT user_id FROM posts WHERE post_id = $1", [postId]);
     if (posts[0]) {
       await notify(pool, { userId: posts[0].user_id, fromUserId: userId, type: "like", postId });
     }

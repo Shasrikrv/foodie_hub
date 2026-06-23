@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 async function notify(pool, { userId, fromUserId, type }) {
   if (userId === fromUserId) return;
   await pool.query(
-    "INSERT INTO notifications (notification_id, user_id, from_user_id, type) VALUES (?, ?, ?, ?)",
+    "INSERT INTO notifications (notification_id, user_id, from_user_id, type) VALUES ($1, $2, $3, $4)",
     [uuidv4(), userId, fromUserId, type]
   ).catch(() => {});
 }
@@ -25,9 +25,9 @@ export async function POST(req) {
       return Response.json({ error: "You cannot send a request to yourself" }, { status: 400 });
     }
 
-    const [existing] = await pool.query(
+    const { rows: existing } = await pool.query(
       `SELECT request_id FROM friend_request
-       WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)`,
+       WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $3 AND receiver_id = $4)`,
       [senderId, targetUserId, targetUserId, senderId]
     );
 
@@ -37,7 +37,7 @@ export async function POST(req) {
 
     const requestId = uuidv4();
     await pool.query(
-      `INSERT INTO friend_request (request_id, sender_id, receiver_id, status) VALUES (?, ?, ?, 1)`,
+      "INSERT INTO friend_request (request_id, sender_id, receiver_id, status) VALUES ($1, $2, $3, 1)",
       [requestId, senderId, targetUserId]
     );
 
@@ -56,11 +56,11 @@ export async function GET() {
       return Response.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const [rows] = await pool.query(
+    const { rows } = await pool.query(
       `SELECT fr.request_id, u.user_id, u.first_name, u.last_name, u.email
        FROM friend_request fr
        JOIN users u ON u.user_id = fr.sender_id
-       WHERE fr.receiver_id = ? AND fr.status = 1`,
+       WHERE fr.receiver_id = $1 AND fr.status = 1`,
       [session.user.id]
     );
 

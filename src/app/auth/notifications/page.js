@@ -9,9 +9,9 @@ function avatarColor(n) { return AVATAR_COLORS[(n?.charCodeAt(0) ?? 0) % AVATAR_
 function initials(f, l) { return `${f?.[0] ?? ""}${l?.[0] ?? ""}`.toUpperCase(); }
 
 function Avatar({ first, last, pic }) {
-  if (pic) return <img src={pic} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />;
+  if (pic) return <img src={pic} alt="" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />;
   return (
-    <div className={`w-10 h-10 rounded-full ${avatarColor(first)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
+    <div className={`w-11 h-11 rounded-full ${avatarColor(first)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
       {initials(first, last)}
     </div>
   );
@@ -19,22 +19,41 @@ function Avatar({ first, last, pic }) {
 
 function typeLabel(type, postTitle) {
   switch (type) {
-    case "comment": return `commented on your post${postTitle ? ` "${postTitle}"` : ""}`;
-    case "like": return `liked your post${postTitle ? ` "${postTitle}"` : ""}`;
+    case "comment": return <>commented on your post{postTitle ? <> &ldquo;<span className="font-semibold text-stone-700">{postTitle}</span>&rdquo;</> : ""}</>;
+    case "like":    return <>liked your post{postTitle ? <> &ldquo;<span className="font-semibold text-stone-700">{postTitle}</span>&rdquo;</> : ""}</>;
     case "friend_request": return "sent you a friend request";
     case "friend_accepted": return "accepted your friend request";
     default: return "interacted with you";
   }
 }
+
 function typeIcon(type) {
   return { comment: "💬", like: "❤️", friend_request: "👋", friend_accepted: "🤝" }[type] ?? "🔔";
 }
+
+function typeCta(type) {
+  if (type === "like" || type === "comment") return "View post →";
+  if (type === "friend_request") return "See requests →";
+  if (type === "friend_accepted") return "View friends →";
+  return null;
+}
+
 function timeAgo(dt) {
   const diff = (Date.now() - new Date(dt)) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function getHref(n) {
+  if ((n.type === "like" || n.type === "comment") && n.post_id) {
+    return `/auth/home?post=${n.post_id}`;
+  }
+  if (n.type === "friend_request" || n.type === "friend_accepted") {
+    return "/auth/dashboard";
+  }
+  return null;
 }
 
 export default function NotificationsPage() {
@@ -53,8 +72,12 @@ export default function NotificationsPage() {
     const data = await res.json();
     setNotifications(Array.isArray(data.data) ? data.data : []);
     setLoading(false);
-    // Mark all as read
     fetch("/api/notifications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "markAllRead" }) });
+  };
+
+  const handleClick = (n) => {
+    const href = getHref(n);
+    if (href) router.push(href);
   };
 
   if (loading) return (
@@ -79,24 +102,45 @@ export default function NotificationsPage() {
             <p className="text-stone-400 text-sm mt-1">No notifications yet.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden">
-            {notifications.map((n, i) => (
-              <div key={n.notification_id}
-                className={`flex items-start gap-4 px-5 py-4 ${!n.is_read ? "bg-orange-50/60" : ""} ${i < notifications.length - 1 ? "border-b border-stone-100" : ""}`}>
-                <div className="relative flex-shrink-0">
-                  <Avatar first={n.first_name} last={n.last_name} pic={n.profile_pic} />
-                  <span className="absolute -bottom-1 -right-1 text-sm">{typeIcon(n.type)}</span>
+          <div className="bg-white rounded-3xl shadow-sm border border-stone-100 overflow-hidden divide-y divide-stone-100">
+            {notifications.map((n) => {
+              const href = getHref(n);
+              const cta = typeCta(n.type);
+              return (
+                <div
+                  key={n.notification_id}
+                  onClick={() => handleClick(n)}
+                  className={`flex items-start gap-4 px-5 py-4 transition-colors ${
+                    !n.is_read ? "bg-orange-50/60" : ""
+                  } ${href ? "cursor-pointer hover:bg-orange-50 active:bg-orange-100" : ""}`}
+                >
+                  <div className="relative flex-shrink-0">
+                    <Avatar first={n.first_name} last={n.last_name} pic={n.profile_pic} />
+                    <span className="absolute -bottom-1 -right-1 text-sm leading-none bg-white rounded-full p-0.5">
+                      {typeIcon(n.type)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-stone-700 leading-snug">
+                      <span className="font-semibold text-stone-900">{n.first_name} {n.last_name}</span>{" "}
+                      {typeLabel(n.type, n.post_title)}
+                    </p>
+                    <p className="text-xs text-stone-400 mt-1">{timeAgo(n.created_at)}</p>
+                    {cta && href && (
+                      <p className="text-xs text-orange-500 font-semibold mt-1.5">{cta}</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    {!n.is_read && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                    {href && (
+                      <svg className="w-4 h-4 text-stone-300" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-stone-800">
-                    <span className="font-semibold">{n.first_name} {n.last_name}</span>{" "}
-                    {typeLabel(n.type, n.post_title)}
-                  </p>
-                  <p className="text-xs text-stone-400 mt-0.5">{timeAgo(n.created_at)}</p>
-                </div>
-                {!n.is_read && <div className="w-2.5 h-2.5 rounded-full bg-orange-500 flex-shrink-0 mt-1.5" />}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

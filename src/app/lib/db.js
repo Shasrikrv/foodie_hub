@@ -1,18 +1,29 @@
-import mysql from "mysql2/promise";
+import { Pool } from "pg";
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT || "3306"),
-  connectionLimit: 20,
-  waitForConnections: true,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
-  idleTimeout: 60000,
-  connectTimeout: 10000,
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
 export default pool;
+
+// import mysql from "mysql2/promise";
+
+// const pool = mysql.createPool({
+//   host: process.env.DB_HOST,
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASSWORD,
+//   database: process.env.DB_NAME,
+//   port: parseInt(process.env.DB_PORT || "3306"),
+//   connectionLimit: 20,
+//   waitForConnections: true,
+//   queueLimit: 0,
+//   enableKeepAlive: true,
+//   keepAliveInitialDelay: 10000,
+//   idleTimeout: 60000,
+//   connectTimeout: 10000,
+// });
+
+// export default pool;

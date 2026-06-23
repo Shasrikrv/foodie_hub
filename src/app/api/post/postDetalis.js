@@ -9,9 +9,10 @@ const mealName = async (mealTitle) => {
   }
 
   const contentId = uuidv4();
-  const command = `INSERT INTO content (content_id, mealName) values (?,?)`;
-  const values = [contentId, mealTitle.mealName];
-  await pool.query(command, values);
+  await pool.query(
+    "INSERT INTO content (content_id, mealname) VALUES ($1, $2)",
+    [contentId, mealTitle.mealName]
+  );
   return { content_id: contentId };
 };
 
@@ -26,9 +27,10 @@ const createPost = async (postData) => {
 
   const postId = uuidv4();
   const visibility = ["friends", "everyone"].includes(postData.visibility) ? postData.visibility : "everyone";
-  const command = `INSERT INTO posts (post_id, title, user_id, content_id, createDate, image_url, visibility) VALUES (?, ?, ?, ?, CURDATE(), ?, ?)`;
-  const VALUES = [postId, postData.title, postData.userId, postData.contentId, postData.imageUrl ?? null, visibility];
-  const [result] = await pool.query(command, VALUES);
+  const result = await pool.query(
+    "INSERT INTO posts (post_id, title, user_id, content_id, createdate, image_url, visibility) VALUES ($1, $2, $3, $4, CURRENT_DATE, $5, $6)",
+    [postId, postData.title, postData.userId, postData.contentId, postData.imageUrl ?? null, visibility]
+  );
   return result;
 };
 
@@ -42,14 +44,10 @@ const commentOnPost = async (commentData) => {
   }
 
   const commentID = uuidv4();
-  const command = `INSERT INTO comments (comment_id, user_id, post_id, comment_text) values (?,?,?,?)`;
-  const values = [
-    commentID,
-    commentData.userId,
-    commentData.postId,
-    commentData.commentText,
-  ];
-  const [result] = await pool.query(command, values);
+  const result = await pool.query(
+    "INSERT INTO comments (comment_id, user_id, post_id, comment_text) VALUES ($1, $2, $3, $4)",
+    [commentID, commentData.userId, commentData.postId, commentData.commentText]
+  );
   return result;
 };
 
@@ -62,9 +60,10 @@ const likeThePost = async (likeData) => {
   }
 
   const likeID = uuidv4();
-  const command = `INSERT INTO likes (like_id, user_id, post_id) values (?,?,?)`;
-  const values = [likeID, likeData.userId, likeData.postId];
-  const [result] = await pool.query(command, values);
+  const result = await pool.query(
+    "INSERT INTO likes (like_id, user_id, post_id) VALUES ($1, $2, $3)",
+    [likeID, likeData.userId, likeData.postId]
+  );
   return result;
 };
 
@@ -81,17 +80,10 @@ const nutritionDeteils = async (nutrirtionData) => {
   }
 
   const nutritionID = uuidv4();
-  const command = `INSERT INTO nutrition (nutrition_id, content_id, calories, protein, carbohydrates, fats, fiber) values (?,?,?,?,?,?,?)`;
-  const values = [
-    nutritionID,
-    nutrirtionData.contentId,
-    nutrirtionData.calories,
-    nutrirtionData.protein,
-    nutrirtionData.carbs,
-    nutrirtionData.fats,
-    nutrirtionData.fiber,
-  ];
-  const [result] = await pool.query(command, values);
+  const result = await pool.query(
+    "INSERT INTO nutrition (nutrition_id, content_id, calories, protein, carbohydrates, fats, fiber) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    [nutritionID, nutrirtionData.contentId, nutrirtionData.calories, nutrirtionData.protein, nutrirtionData.carbs, nutrirtionData.fats, nutrirtionData.fiber]
+  );
   return result;
 };
 
@@ -109,9 +101,10 @@ const mealType = async (mealTypeData) => {
   }
 
   const mealTypeID = uuidv4();
-  const command = `INSERT INTO mealType (mealType_id, content_id, mealCategory) VALUES (?, ?, ?)`;
-  const values = [mealTypeID, mealTypeData.contentId, mealTypeData.mealCategory];
-  await pool.query(command, values);
+  await pool.query(
+    "INSERT INTO mealtype (mealtype_id, content_id, mealcategory) VALUES ($1, $2, $3)",
+    [mealTypeID, mealTypeData.contentId, mealTypeData.mealCategory]
+  );
   return { mealTypeId: mealTypeID, mealCategory: mealTypeData.mealCategory };
 };
 
@@ -123,12 +116,11 @@ const mealContentJunction = async (mealContentData) => {
     return `Invalid fields -${invalidFields.join(",")}`;
   }
 
-  const command = `INSERT INTO mealContentJunction (content_id, mealType_id) values (?,?)`;
-  const values = [mealContentData.contentId, mealContentData.mealTypeId];
-  await pool.query(command, values);
-  return {
-    message: "Meal content junction created successfully",
-  };
+  await pool.query(
+    "INSERT INTO mealcontentjunction (content_id, mealtype_id) VALUES ($1, $2)",
+    [mealContentData.contentId, mealContentData.mealTypeId]
+  );
+  return { message: "Meal content junction created successfully" };
 };
 
 const ingredientsList = async (ingredientsData) => {
@@ -153,16 +145,10 @@ const ingredientsList = async (ingredientsData) => {
   }
 
   const ingredientsID = uuidv4();
-  const command = `INSERT INTO ingredients (ingredients_id, content_id, name, quantity, units) VALUES (?,?,?,?,?)`;
-  const values = [
-    ingredientsID,
-    ingredientsData.contentId,
-    ingredientsData.ingredientName,
-    ingredientsData.quantity,
-    ingredientsData.unit,
-  ];
-
-  const [result] = await pool.query(command, values);
+  const result = await pool.query(
+    "INSERT INTO ingredients (ingredients_id, content_id, name, quantity, units) VALUES ($1, $2, $3, $4, $5)",
+    [ingredientsID, ingredientsData.contentId, ingredientsData.ingredientName, ingredientsData.quantity, ingredientsData.unit]
+  );
   return result;
 };
 
@@ -177,15 +163,10 @@ const instructions = async (instructionsSteps) => {
   }
 
   const instructionsId = uuidv4();
-  const command = `INSERT INTO instructions (instructions_id, content_id, steps, description) VALUES (?,?,?,?)`;
-  const values = [
-    instructionsId,
-    instructionsSteps.contentId,
-    instructionsSteps.step,
-    instructionsSteps.description,
-  ];
-
-  const [result] = await pool.query(command, values);
+  const result = await pool.query(
+    "INSERT INTO instructions (instructions_id, content_id, steps, description) VALUES ($1, $2, $3, $4)",
+    [instructionsId, instructionsSteps.contentId, instructionsSteps.step, instructionsSteps.description]
+  );
   return result;
 };
 
