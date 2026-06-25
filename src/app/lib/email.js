@@ -1,54 +1,23 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// Creates a real SMTP transport using env vars, or an Ethereal test transport in dev
-export async function createTransport() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+const FROM = "FoodieHub <onboarding@resend.dev>";
 
-  // If credentials are configured, use them (Gmail or any SMTP)
-  if (user && pass) {
-    return nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.EMAIL_PORT || "587"),
-      secure: false,
-      auth: { user, pass },
-    });
-  }
+function getClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY is not set.");
+  return new Resend(apiKey);
+}
 
-  // Dev fallback: auto-create an Ethereal test account (emails are captured at ethereal.email)
-  if (process.env.NODE_ENV !== "production") {
-    const testAccount = await nodemailer.createTestAccount();
-    const transport = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-    // Attach the preview URL generator so callers can log it
-    transport._ethereal = true;
-    return transport;
-  }
-
-  throw new Error("EMAIL_USER and EMAIL_PASS must be set in production.");
+async function send({ to, subject, html }) {
+  const resend = getClient();
+  const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+  if (error) throw new Error(error.message);
 }
 
 const baseStyle = "font-family:sans-serif;max-width:480px;margin:0 auto";
-const FROM = () => `"FoodieHub" <${process.env.EMAIL_USER || "noreply@foodiehub.app"}>`;
-
-async function send(mailOptions) {
-  const transport = await createTransport();
-  const info = await transport.sendMail(mailOptions);
-
-  // In dev with Ethereal, log the preview URL so you can inspect the email
-  if (transport._ethereal) {
-    console.log("\n📧 Ethereal preview URL:", nodemailer.getTestMessageUrl(info), "\n");
-  }
-  return info;
-}
 
 export async function sendPasswordResetEmail(to, resetUrl) {
   return send({
-    from: FROM(),
     to,
     subject: "Reset your FoodieHub password",
     html: `
@@ -70,7 +39,6 @@ export async function sendPasswordResetEmail(to, resetUrl) {
 
 export async function sendAdminReplyEmail(to, ticketSubject, replyMessage, adminName = "FoodieHub Support") {
   return send({
-    from: `"FoodieHub Support" <${process.env.EMAIL_USER || "noreply@foodiehub.app"}>`,
     to,
     subject: `Re: ${ticketSubject} — FoodieHub Support`,
     html: `
@@ -90,7 +58,6 @@ export async function sendAdminReplyEmail(to, ticketSubject, replyMessage, admin
 
 export async function sendAdminResetLinkEmail(to, resetUrl) {
   return send({
-    from: `"FoodieHub Support" <${process.env.EMAIL_USER || "noreply@foodiehub.app"}>`,
     to,
     subject: "Your FoodieHub password reset link",
     html: `
@@ -112,7 +79,6 @@ export async function sendAdminResetLinkEmail(to, resetUrl) {
 
 export async function sendTestEmail(to) {
   return send({
-    from: FROM(),
     to,
     subject: "FoodieHub — SMTP test successful ✓",
     html: `
