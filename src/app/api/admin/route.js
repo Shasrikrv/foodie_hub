@@ -176,18 +176,12 @@ export async function POST(req) {
 
     if (action === "testEmail") {
       const to = body.to || session.user.email;
-      let etherealUrl = null;
-
       try {
-        const info = await sendTestEmail(to);
-        const nodemailer = await import("nodemailer");
-        const url = nodemailer.default.getTestMessageUrl(info);
-        if (url) etherealUrl = url;
+        await sendTestEmail(to);
       } catch (emailErr) {
         return Response.json({ error: emailErr.message }, { status: 500 });
       }
-
-      return Response.json({ success: true, etherealUrl, sentTo: to });
+      return Response.json({ success: true, sentTo: to });
     }
 
     return Response.json({ error: "Unknown action" }, { status: 400 });

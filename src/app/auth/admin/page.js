@@ -382,24 +382,20 @@ export default function AdminPage() {
         {/* Email Config Panel */}
         {showEmailPanel && (
           <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-6 shadow-sm">
-            <h3 className="font-bold text-stone-800 mb-1">Email / SMTP Setup</h3>
+            <h3 className="font-bold text-stone-800 mb-1">Email Setup (Resend)</h3>
             <p className="text-sm text-stone-500 mb-4">
-              FoodieHub sends password reset emails via SMTP. The free option is <strong>Gmail with an App Password</strong>.
+              FoodieHub sends transactional emails via <strong>Resend</strong>. Get a free API key at{" "}
+              <a href="https://resend.com" target="_blank" rel="noreferrer" className="text-orange-500 underline">resend.com</a> (3,000 emails/month free).
             </p>
 
-            {/* Setup steps */}
             <div className="bg-stone-50 rounded-xl p-4 mb-4 space-y-2 text-sm text-stone-700">
-              <p className="font-semibold text-stone-800 mb-2">How to set up Gmail SMTP (free):</p>
-              <p>1. Go to <span className="font-mono text-orange-600">myaccount.google.com</span> → Security → 2-Step Verification and enable it.</p>
-              <p>2. Search for <strong>&ldquo;App passwords&rdquo;</strong> in Google account settings.</p>
-              <p>3. Create a new App Password for &ldquo;Mail&rdquo; / &ldquo;Other&rdquo; — copy the 16-char code.</p>
-              <p>4. Add to <span className="font-mono text-orange-600">.env.local</span>:</p>
-              <pre className="bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-600 mt-1 overflow-x-auto">{`EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASS=abcd efgh ijkl mnop`}</pre>
-              <p>5. Restart the dev server and click <strong>Send Test Email</strong> below.</p>
-              <p className="text-stone-400 text-xs mt-2">If SMTP is not configured, a free Ethereal test account is used in development — check the server console for a preview link.</p>
+              <p className="font-semibold text-stone-800 mb-2">How to configure Resend:</p>
+              <p>1. Sign up at <span className="font-mono text-orange-600">resend.com</span> and create an API key.</p>
+              <p>2. Add to <span className="font-mono text-orange-600">.env.local</span>:</p>
+              <pre className="bg-white border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-600 mt-1 overflow-x-auto">{`RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx`}</pre>
+              <p>3. (Optional) Verify your own domain in the Resend dashboard to send from a custom address instead of <span className="font-mono text-orange-600">onboarding@resend.dev</span>.</p>
+              <p>4. Restart the dev server and click <strong>Send Test Email</strong> below.</p>
+              <p className="text-stone-400 text-xs mt-2">Without a verified domain, Resend only delivers to your Resend account&apos;s email in test mode.</p>
             </div>
 
             <button onClick={testEmail} disabled={emailTesting}
@@ -413,14 +409,6 @@ EMAIL_PASS=abcd efgh ijkl mnop`}</pre>
                   <>
                     <p className="font-semibold text-emerald-700">Email sent successfully!</p>
                     <p className="text-emerald-600 text-xs mt-0.5">Sent to: {emailTestResult.sentTo}</p>
-                    {emailTestResult.etherealUrl && (
-                      <p className="text-xs mt-2 text-stone-500">
-                        Ethereal preview (dev only):{" "}
-                        <a href={emailTestResult.etherealUrl} target="_blank" rel="noreferrer" className="text-orange-500 underline break-all">
-                          {emailTestResult.etherealUrl}
-                        </a>
-                      </p>
-                    )}
                   </>
                 ) : (
                   <>
