@@ -15,6 +15,8 @@ const registerSchema = z.object({
     .regex(/[a-z]/, "Password must contain at least one lowercase letter")
     .regex(/[0-9]/, "Password must contain at least one number")
     .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  recoveryEmail: z.string().optional(),
+  phoneNumber: z.string().optional(),
 });
 
 export async function GET() {
@@ -40,7 +42,14 @@ export async function POST(req) {
       return NextResponse.json({ errors }, { status: 400 });
     }
 
-    const { firstName, lastName, email, password } = result.data;
+    const { firstName, lastName, email, password, recoveryEmail, phoneNumber } = result.data;
+
+    if (!recoveryEmail?.trim() && !phoneNumber?.trim()) {
+      return NextResponse.json(
+        { errors: [{ field: "recovery", message: "Please provide a recovery email or phone number" }] },
+        { status: 400 }
+      );
+    }
 
     const { rows: existingUsers } = await pool.query(
       "SELECT user_id FROM users WHERE email = $1",
@@ -54,8 +63,8 @@ export async function POST(req) {
     const hashedPassword = await hash(password, 12);
     const userId = uuidv4();
     await pool.query(
-      "INSERT INTO users (user_id, first_name, last_name, email, password) VALUES ($1, $2, $3, $4, $5)",
-      [userId, firstName, lastName, email, hashedPassword]
+      "INSERT INTO users (user_id, first_name, last_name, email, password, phone_number, recovery_email) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [userId, firstName, lastName, email, hashedPassword, phoneNumber?.trim() || null, recoveryEmail?.trim() || null]
     );
 
     return NextResponse.json({ message: "User registered successfully" }, { status: 201 });

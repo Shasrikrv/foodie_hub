@@ -60,13 +60,14 @@ export const authOptions = {
     async jwt({ token, user, account, trigger }) {
       if (trigger === "update" && token.id) {
         const { rows } = await pool.query(
-          "SELECT first_name, last_name, is_admin, profile_pic FROM users WHERE user_id = $1",
+          "SELECT first_name, last_name, is_admin, profile_pic, phone_number, recovery_email FROM users WHERE user_id = $1",
           [token.id]
         );
         if (rows[0]) {
           token.name = `${rows[0].first_name} ${rows[0].last_name}`.trim();
           token.isAdmin = !!rows[0].is_admin;
           token.profilePic = rows[0].profile_pic || null;
+          token.recoveryComplete = !!(rows[0].phone_number || rows[0].recovery_email);
         }
         return token;
       }
@@ -76,9 +77,14 @@ export const authOptions = {
           token.id = user.id;
           token.isAdmin = user.isAdmin;
           token.profilePic = user.profilePic;
+          const { rows: rRows } = await pool.query(
+            "SELECT phone_number, recovery_email FROM users WHERE user_id = $1",
+            [user.id]
+          );
+          token.recoveryComplete = !!(rRows[0]?.phone_number || rRows[0]?.recovery_email);
         } else {
           const { rows } = await pool.query(
-            "SELECT user_id, is_admin, profile_pic, first_name, last_name FROM users WHERE email = $1",
+            "SELECT user_id, is_admin, profile_pic, first_name, last_name, phone_number, recovery_email FROM users WHERE email = $1",
             [token.email]
           );
           if (rows[0]) {
@@ -86,6 +92,7 @@ export const authOptions = {
             token.isAdmin = !!rows[0].is_admin;
             token.profilePic = rows[0].profile_pic || null;
             token.name = `${rows[0].first_name} ${rows[0].last_name}`.trim();
+            token.recoveryComplete = !!(rows[0].phone_number || rows[0].recovery_email);
           }
         }
       }
@@ -95,6 +102,7 @@ export const authOptions = {
       session.user.id = token.id;
       session.user.isAdmin = token.isAdmin ?? false;
       session.user.profilePic = token.profilePic ?? null;
+      session.user.recoveryComplete = token.recoveryComplete ?? false;
       if (token.name) session.user.name = token.name;
       return session;
     },

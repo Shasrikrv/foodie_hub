@@ -22,6 +22,8 @@ export default function RegistrationPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -30,12 +32,18 @@ export default function RegistrationPage() {
   const handleRegistration = async (e) => {
     e.preventDefault();
     setErrors([]);
+
+    if (!recoveryEmail.trim() && !phoneNumber.trim()) {
+      setErrors(["Please provide a recovery email or phone number"]);
+      return;
+    }
+
     setLoading(true);
 
     const res = await fetch("/api/user/login/registration", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, email, password }),
+      body: JSON.stringify({ firstName, lastName, email, password, recoveryEmail, phoneNumber }),
     });
     const data = await res.json();
     setLoading(false);
@@ -136,6 +144,33 @@ export default function RegistrationPage() {
                 required
                 className="w-full bg-white/10 border border-white/25 rounded-xl px-4 py-3 text-white placeholder-white/35 text-sm focus:outline-none focus:border-orange-400 focus:bg-white/15 transition-all"
               />
+            </div>
+
+            <div className="border border-white/15 rounded-2xl p-4 space-y-3">
+              <div>
+                <p className="text-white/70 text-xs font-semibold uppercase tracking-wide mb-0.5">Account Recovery</p>
+                <p className="text-white/45 text-xs">To protect your account, provide at least one recovery option.</p>
+              </div>
+              <div>
+                <label className="block text-white/80 text-xs font-medium mb-1.5">Recovery email</label>
+                <input
+                  type="email"
+                  value={recoveryEmail}
+                  onChange={(e) => setRecoveryEmail(e.target.value)}
+                  placeholder="backup@example.com"
+                  className="w-full bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/40 focus:outline-none focus:border-orange-400 focus:bg-white/15 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-white/80 text-xs font-medium mb-1.5">Phone number</label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+1 555 000 0000"
+                  className="w-full bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/40 focus:outline-none focus:border-orange-400 focus:bg-white/15 transition-all"
+                />
+              </div>
             </div>
 
             {errors.length > 0 && (
