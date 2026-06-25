@@ -33,7 +33,7 @@ export default function EmojiPicker({ onSelect, className = "" }) {
       </button>
 
       {open && (
-        <div className="absolute bottom-8 left-0 z-50 bg-white rounded-2xl shadow-2xl border border-stone-100 w-72">
+        <div className="absolute bottom-8 left-0 z-50 bg-white rounded-2xl shadow-2xl border border-stone-100 w-64 max-w-[calc(100vw-1.5rem)]">
           {/* Category tabs */}
           <div className="flex overflow-x-auto border-b border-stone-100 px-2 pt-2 gap-1 scrollbar-hide">
             {Object.keys(CATEGORIES).map((cat) => (

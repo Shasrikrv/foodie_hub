@@ -149,7 +149,7 @@ function ChatContent() {
   return (
     <div className="bg-stone-50 min-h-screen flex flex-col">
       <NavBar />
-      <div className="flex-1 max-w-4xl mx-auto w-full flex overflow-hidden" style={{ height: "calc(100vh - 56px)" }}>
+      <div className="flex-1 max-w-4xl mx-auto w-full flex overflow-hidden h-[calc(100dvh-56px)]">
 
         {/* Friends sidebar */}
         <div className={`${selectedFriend ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-72 bg-white border-r border-stone-100`}>
@@ -244,7 +244,7 @@ function ChatContent() {
                     className="flex-1 bg-stone-100 rounded-full px-4 py-2.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-orange-300"
                   />
                   <button type="submit" disabled={!text.trim() || sending}
-                    className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0">
+                    className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white w-10 h-10 rounded-full flex items-center justify-center transition-colors flex-shrink-0">
                     <svg className="w-4 h-4 rotate-90" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                     </svg>

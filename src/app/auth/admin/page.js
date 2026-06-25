@@ -490,9 +490,9 @@ EMAIL_PASS=abcd efgh ijkl mnop`}</pre>
                 <thead className="bg-stone-50 border-b border-stone-100">
                   <tr>
                     <th className="text-left px-5 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">User</th>
-                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Posts</th>
-                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Friends</th>
-                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">AI Credits</th>
+                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide hidden sm:table-cell">Posts</th>
+                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide hidden sm:table-cell">Friends</th>
+                    <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide hidden md:table-cell">AI Credits</th>
                     <th className="text-left px-4 py-3.5 text-xs font-semibold text-stone-400 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
@@ -509,9 +509,9 @@ EMAIL_PASS=abcd efgh ijkl mnop`}</pre>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-stone-600 font-medium">{u.post_count}</td>
-                      <td className="px-4 py-4 text-stone-600 font-medium">{u.friend_count}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-stone-600 font-medium hidden sm:table-cell">{u.post_count}</td>
+                      <td className="px-4 py-4 text-stone-600 font-medium hidden sm:table-cell">{u.friend_count}</td>
+                      <td className="px-4 py-4 hidden md:table-cell">
                         <span className="font-semibold text-stone-700">{u.ai_credits}</span>
                       </td>
                       <td className="px-4 py-4">
