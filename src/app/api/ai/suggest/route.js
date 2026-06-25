@@ -1,8 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import pool from "@/app/lib/db";
 
 const PROMPT = `Analyze this food image and provide recipe details as JSON with these exact fields:
 {
@@ -20,10 +19,19 @@ export async function POST(req) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Only admin can use the AI feature — protects API credits from public usage
-    if (!session.user.isAdmin) {
-      return Response.json({ error: "AI suggestions are only available to admins." }, { status: 403 });
+    const { rows } = await pool.query(
+      "SELECT anthropic_api_key FROM users WHERE user_id = $1",
+      [session.user.id]
+    );
+    const apiKey = rows[0]?.anthropic_api_key;
+    if (!apiKey) {
+      return Response.json(
+        { error: "No Anthropic API key found. Add your key in Settings to use AI features." },
+        { status: 402 }
+      );
     }
+
+    const client = new Anthropic({ apiKey });
 
     const contentType = req.headers.get("content-type") || "";
     let messageContent;
@@ -86,6 +94,9 @@ export async function POST(req) {
     return Response.json({ suggestion });
   } catch (err) {
     console.error("AI suggest error:", err);
-    return Response.json({ error: err.message || "AI suggestion failed" }, { status: 500 });
+    const msg = err?.status === 401
+      ? "Invalid Anthropic API key. Please update it in Settings."
+      : err.message || "AI suggestion failed";
+    return Response.json({ error: msg }, { status: 500 });
   }
 }

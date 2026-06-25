@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -56,6 +56,16 @@ export default function PostPage() {
   const [error, setError] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
+  const [hasAiKey, setHasAiKey] = useState(null);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/user/profile")
+        .then((r) => r.json())
+        .then((d) => setHasAiKey(!!d.data?.has_anthropic_key))
+        .catch(() => setHasAiKey(false));
+    }
+  }, [status]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -282,27 +292,32 @@ export default function PostPage() {
           />
         </div>
 
-        {/* AI Suggest — admin only */}
-        {session?.user?.isAdmin && (
-          <>
-            <button
-              type="button"
-              onClick={handleAISuggest}
-              disabled={aiLoading}
-              className="w-full bg-gradient-to-r from-violet-500 to-indigo-600 hover:opacity-90 disabled:opacity-60 text-white font-bold py-3.5 rounded-2xl transition-all shadow-sm text-sm flex items-center justify-center gap-2"
-            >
-              {aiLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Thinking…
-                </>
-              ) : (
-                <>✨ AI Suggest Recipe Details</>
-              )}
-            </button>
-            {aiMsg && <p className="text-violet-700 text-sm font-medium bg-violet-50 border border-violet-100 rounded-2xl px-4 py-3">{aiMsg}</p>}
-          </>
-        )}
+        {/* AI Suggest */}
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleAISuggest}
+            disabled={aiLoading || hasAiKey === false}
+            className="w-full bg-gradient-to-r from-violet-500 to-indigo-600 hover:opacity-90 disabled:opacity-60 text-white font-bold py-3.5 rounded-2xl transition-all shadow-sm text-sm flex items-center justify-center gap-2"
+          >
+            {aiLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Thinking…
+              </>
+            ) : (
+              <>✨ AI Suggest Recipe Details</>
+            )}
+          </button>
+          {hasAiKey === false && (
+            <p className="text-xs text-stone-400 text-center">
+              Add your Anthropic API key in{" "}
+              <a href="/auth/settings" className="text-violet-500 font-semibold hover:underline">Settings</a>{" "}
+              to use AI suggestions.
+            </p>
+          )}
+          {aiMsg && <p className="text-violet-700 text-sm font-medium bg-violet-50 border border-violet-100 rounded-2xl px-4 py-3">{aiMsg}</p>}
+        </div>
 
         {/* Post details */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-5">

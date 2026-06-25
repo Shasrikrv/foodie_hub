@@ -2,9 +2,13 @@ import pool from "@/app/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { compare, hash } from "bcryptjs";
-import { writeFile } from "fs/promises";
-import { join } from "path";
-import { v4 as uuidv4 } from "uuid";
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function GET() {
   try {
@@ -12,7 +16,7 @@ export async function GET() {
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { rows } = await pool.query(
-      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin FROM users WHERE user_id = $1",
+      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin, anthropic_api_key IS NOT NULL AND anthropic_api_key != '' AS has_anthropic_key FROM users WHERE user_id = $1",
       [session.user.id]
     );
     if (!rows[0]) return Response.json({ error: "Not found" }, { status: 404 });
@@ -37,18 +41,28 @@ export async function PUT(req) {
       const allowed = ["image/jpeg", "image/png", "image/webp"];
       if (!allowed.includes(file.type)) return Response.json({ error: "Invalid file type" }, { status: 400 });
 
-      const ext = file.type.split("/")[1];
-      const filename = `${uuidv4()}.${ext}`;
-      const bytes = await file.arrayBuffer();
-      const uploadDir = join(process.cwd(), "public", "uploads", "avatars");
-      await writeFile(join(uploadDir, filename), Buffer.from(bytes));
-      const url = `/uploads/avatars/${filename}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const url = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "foodiehub/avatars", resource_type: "image" },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result.secure_url);
+          }
+        ).end(buffer);
+      });
 
       await pool.query("UPDATE users SET profile_pic = $1 WHERE user_id = $2", [url, session.user.id]);
       return Response.json({ url });
     }
 
-    const { firstName, lastName, bio, currentPassword, newPassword } = await req.json();
+    const { firstName, lastName, bio, currentPassword, newPassword, anthropicApiKey } = await req.json();
+
+    if (anthropicApiKey !== undefined) {
+      const key = anthropicApiKey?.trim() || null;
+      await pool.query("UPDATE users SET anthropic_api_key = $1 WHERE user_id = $2", [key, session.user.id]);
+      return Response.json({ success: true });
+    }
 
     if (newPassword) {
       const { rows } = await pool.query("SELECT password FROM users WHERE user_id = $1", [session.user.id]);

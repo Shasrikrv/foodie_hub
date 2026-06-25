@@ -67,6 +67,12 @@ export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // AI Settings
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
+  const [keyMsg, setKeyMsg] = useState("");
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
     if (status === "authenticated") loadProfile();
@@ -87,6 +93,7 @@ export default function SettingsPage() {
         setFirstName(data.data.first_name || "");
         setLastName(data.data.last_name || "");
         setBio(data.data.bio || "");
+        setHasAnthropicKey(!!data.data.has_anthropic_key);
       } else {
         setProfileError("Could not load profile data. Please refresh.");
       }
@@ -143,6 +150,39 @@ export default function SettingsPage() {
       body: JSON.stringify({ email: session?.user?.email, subject: supportSubject, message: supportMsg }),
     });
     if (res.ok) { setSupportSent(true); setSupportSubject(""); setSupportMsg(""); }
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!anthropicKey.trim()) return;
+    setSavingKey(true); setKeyMsg("");
+    const res = await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ anthropicApiKey: anthropicKey.trim() }),
+    });
+    setSavingKey(false);
+    if (res.ok) {
+      setHasAnthropicKey(true);
+      setAnthropicKey("");
+      setKeyMsg("API key saved successfully!");
+    } else {
+      setKeyMsg("Failed to save key. Please try again.");
+    }
+  };
+
+  const handleRemoveApiKey = async () => {
+    setSavingKey(true); setKeyMsg("");
+    const res = await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ anthropicApiKey: "" }),
+    });
+    setSavingKey(false);
+    if (res.ok) {
+      setHasAnthropicKey(false);
+      setAnthropicKey("");
+      setKeyMsg("API key removed.");
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -265,6 +305,56 @@ export default function SettingsPage() {
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </form>
+        </div>
+
+        {/* AI Settings */}
+        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6">
+          <h2 className="font-bold text-stone-800 mb-1">AI Recipe Suggestions</h2>
+          <p className="text-xs text-stone-400 mb-4">
+            Connect your own{" "}
+            <span className="font-medium text-stone-500">Anthropic API key</span>{" "}
+            to use AI-powered recipe suggestions when creating posts. Your key is used only for your requests and charged to your Anthropic account.
+          </p>
+          {hasAnthropicKey ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                <span className="text-emerald-500 text-lg">✓</span>
+                <p className="text-sm font-semibold text-emerald-700">API key connected</p>
+              </div>
+              <button
+                onClick={handleRemoveApiKey}
+                disabled={savingKey}
+                className="w-full border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                {savingKey ? "Removing…" : "Remove API Key"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="password"
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-api03-…"
+                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-800 bg-stone-50 focus:outline-none focus:border-violet-400 transition-all font-mono"
+              />
+              <button
+                onClick={handleSaveApiKey}
+                disabled={savingKey || !anthropicKey.trim()}
+                className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+              >
+                {savingKey ? "Saving…" : "Save API Key"}
+              </button>
+            </div>
+          )}
+          {keyMsg && (
+            <p className={`text-xs font-medium mt-3 ${keyMsg.includes("success") ? "text-emerald-600" : "text-red-500"}`}>
+              {keyMsg}
+            </p>
+          )}
+          <p className="text-xs text-stone-300 mt-3">
+            Get your key at console.anthropic.com → API Keys
+          </p>
         </div>
 
         {/* Contact Support */}

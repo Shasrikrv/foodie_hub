@@ -1,7 +1,12 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req) {
   try {
@@ -26,14 +31,19 @@ export async function POST(req) {
       return Response.json({ error: "Image must be under 5MB." }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop().toLowerCase();
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, filename), Buffer.from(await file.arrayBuffer()));
+    const url = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        { folder: "foodiehub/posts", resource_type: "image" },
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result.secure_url);
+        }
+      ).end(buffer);
+    });
 
-    return Response.json({ url: `/uploads/${filename}` });
+    return Response.json({ url });
   } catch (error) {
     console.error("Upload error:", error);
     return Response.json({ error: "Upload failed" }, { status: 500 });
