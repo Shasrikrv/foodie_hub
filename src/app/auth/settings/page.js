@@ -68,10 +68,10 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
 
   // AI Settings
-  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [savingKey, setSavingKey] = useState(false);
-  const [keyMsg, setKeyMsg] = useState("");
+  const [aiKeys, setAiKeys] = useState({ anthropic: false, openai: false, gemini: false });
+  const [keyInputs, setKeyInputs] = useState({ anthropic: "", openai: "", gemini: "" });
+  const [savingKey, setSavingKey] = useState(null);
+  const [keyMsg, setKeyMsg] = useState({ anthropic: "", openai: "", gemini: "" });
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -93,7 +93,7 @@ export default function SettingsPage() {
         setFirstName(data.data.first_name || "");
         setLastName(data.data.last_name || "");
         setBio(data.data.bio || "");
-        setHasAnthropicKey(!!data.data.has_anthropic_key);
+        setAiKeys({ anthropic: !!data.data.has_anthropic_key, openai: !!data.data.has_openai_key, gemini: !!data.data.has_gemini_key });
       } else {
         setProfileError("Could not load profile data. Please refresh.");
       }
@@ -152,36 +152,45 @@ export default function SettingsPage() {
     if (res.ok) { setSupportSent(true); setSupportSubject(""); setSupportMsg(""); }
   };
 
-  const handleSaveApiKey = async () => {
-    if (!anthropicKey.trim()) return;
-    setSavingKey(true); setKeyMsg("");
+  const PROVIDERS = [
+    { id: "anthropic", label: "Anthropic (Claude)", field: "anthropicApiKey", placeholder: "sk-ant-api03-…", hint: "console.anthropic.com → API Keys" },
+    { id: "openai",    label: "OpenAI (GPT-4o)",   field: "openaiApiKey",    placeholder: "sk-…",            hint: "platform.openai.com → API Keys" },
+    { id: "gemini",    label: "Google Gemini",      field: "geminiApiKey",    placeholder: "AIza…",           hint: "aistudio.google.com → Get API Key" },
+  ];
+
+  const handleSaveKey = async (provider) => {
+    const p = PROVIDERS.find((x) => x.id === provider);
+    if (!keyInputs[provider].trim()) return;
+    setSavingKey(provider);
+    setKeyMsg((prev) => ({ ...prev, [provider]: "" }));
     const res = await fetch("/api/user/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ anthropicApiKey: anthropicKey.trim() }),
+      body: JSON.stringify({ [p.field]: keyInputs[provider].trim() }),
     });
-    setSavingKey(false);
+    setSavingKey(null);
     if (res.ok) {
-      setHasAnthropicKey(true);
-      setAnthropicKey("");
-      setKeyMsg("API key saved successfully!");
+      setAiKeys((prev) => ({ ...prev, [provider]: true }));
+      setKeyInputs((prev) => ({ ...prev, [provider]: "" }));
+      setKeyMsg((prev) => ({ ...prev, [provider]: "saved" }));
     } else {
-      setKeyMsg("Failed to save key. Please try again.");
+      setKeyMsg((prev) => ({ ...prev, [provider]: "error" }));
     }
   };
 
-  const handleRemoveApiKey = async () => {
-    setSavingKey(true); setKeyMsg("");
+  const handleRemoveKey = async (provider) => {
+    const p = PROVIDERS.find((x) => x.id === provider);
+    setSavingKey(provider);
+    setKeyMsg((prev) => ({ ...prev, [provider]: "" }));
     const res = await fetch("/api/user/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ anthropicApiKey: "" }),
+      body: JSON.stringify({ [p.field]: "" }),
     });
-    setSavingKey(false);
+    setSavingKey(null);
     if (res.ok) {
-      setHasAnthropicKey(false);
-      setAnthropicKey("");
-      setKeyMsg("API key removed.");
+      setAiKeys((prev) => ({ ...prev, [provider]: false }));
+      setKeyMsg((prev) => ({ ...prev, [provider]: "removed" }));
     }
   };
 
@@ -310,51 +319,51 @@ export default function SettingsPage() {
         {/* AI Settings */}
         <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6">
           <h2 className="font-bold text-stone-800 mb-1">AI Recipe Suggestions</h2>
-          <p className="text-xs text-stone-400 mb-4">
-            Connect your own{" "}
-            <span className="font-medium text-stone-500">Anthropic API key</span>{" "}
-            to use AI-powered recipe suggestions when creating posts. Your key is used only for your requests and charged to your Anthropic account.
+          <p className="text-xs text-stone-400 mb-5">
+            Connect your own API key from any supported provider. Your key is used only for your requests and billed to your own account.
           </p>
-          {hasAnthropicKey ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
-                <span className="text-emerald-500 text-lg">✓</span>
-                <p className="text-sm font-semibold text-emerald-700">API key connected</p>
+          <div className="space-y-4">
+            {PROVIDERS.map((p) => (
+              <div key={p.id} className="border border-stone-100 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-stone-700">{p.label}</span>
+                  {aiKeys[p.id] && (
+                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Connected</span>
+                  )}
+                </div>
+                {aiKeys[p.id] ? (
+                  <button
+                    onClick={() => handleRemoveKey(p.id)}
+                    disabled={savingKey === p.id}
+                    className="w-full border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 font-semibold py-2 rounded-xl text-xs transition-colors"
+                  >
+                    {savingKey === p.id ? "Removing…" : "Remove Key"}
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={keyInputs[p.id]}
+                      onChange={(e) => setKeyInputs((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                      placeholder={p.placeholder}
+                      className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-xs text-stone-800 bg-stone-50 focus:outline-none focus:border-violet-400 transition-all font-mono"
+                    />
+                    <button
+                      onClick={() => handleSaveKey(p.id)}
+                      disabled={savingKey === p.id || !keyInputs[p.id].trim()}
+                      className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold px-4 rounded-xl text-xs transition-colors"
+                    >
+                      {savingKey === p.id ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                )}
+                {keyMsg[p.id] === "saved"   && <p className="text-xs text-emerald-600 font-medium mt-2">Key saved successfully!</p>}
+                {keyMsg[p.id] === "removed" && <p className="text-xs text-stone-400 mt-2">Key removed.</p>}
+                {keyMsg[p.id] === "error"   && <p className="text-xs text-red-500 mt-2">Failed to save. Please try again.</p>}
+                <p className="text-xs text-stone-300 mt-2">{p.hint}</p>
               </div>
-              <button
-                onClick={handleRemoveApiKey}
-                disabled={savingKey}
-                className="w-full border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 font-semibold py-2.5 rounded-xl text-sm transition-colors"
-              >
-                {savingKey ? "Removing…" : "Remove API Key"}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <input
-                type="password"
-                value={anthropicKey}
-                onChange={(e) => setAnthropicKey(e.target.value)}
-                placeholder="sk-ant-api03-…"
-                className="w-full border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-800 bg-stone-50 focus:outline-none focus:border-violet-400 transition-all font-mono"
-              />
-              <button
-                onClick={handleSaveApiKey}
-                disabled={savingKey || !anthropicKey.trim()}
-                className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
-              >
-                {savingKey ? "Saving…" : "Save API Key"}
-              </button>
-            </div>
-          )}
-          {keyMsg && (
-            <p className={`text-xs font-medium mt-3 ${keyMsg.includes("success") ? "text-emerald-600" : "text-red-500"}`}>
-              {keyMsg}
-            </p>
-          )}
-          <p className="text-xs text-stone-300 mt-3">
-            Get your key at console.anthropic.com → API Keys
-          </p>
+            ))}
+          </div>
         </div>
 
         {/* Contact Support */}

@@ -56,14 +56,23 @@ export default function PostPage() {
   const [error, setError] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMsg, setAiMsg] = useState("");
-  const [hasAiKey, setHasAiKey] = useState(null);
+  const [availableProviders, setAvailableProviders] = useState(null);
+  const [selectedProvider, setSelectedProvider] = useState("");
 
   useEffect(() => {
     if (status === "authenticated") {
       fetch("/api/user/profile")
         .then((r) => r.json())
-        .then((d) => setHasAiKey(!!d.data?.has_anthropic_key))
-        .catch(() => setHasAiKey(false));
+        .then((d) => {
+          const providers = [
+            d.data?.has_anthropic_key && "anthropic",
+            d.data?.has_openai_key && "openai",
+            d.data?.has_gemini_key && "gemini",
+          ].filter(Boolean);
+          setAvailableProviders(providers);
+          if (providers.length > 0) setSelectedProvider(providers[0]);
+        })
+        .catch(() => setAvailableProviders([]));
     }
   }, [status]);
 
@@ -96,11 +105,12 @@ export default function PostPage() {
       if (imageFile) {
         const form = new FormData();
         form.append("image", imageFile);
+        form.append("provider", selectedProvider);
         body = form;
         // no Content-Type header — browser sets it with boundary for FormData
       } else {
         headers["Content-Type"] = "application/json";
-        body = JSON.stringify({});
+        body = JSON.stringify({ provider: selectedProvider });
       }
       const res = await fetch("/api/ai/suggest", { method: "POST", headers, body });
       const data = await res.json();
@@ -294,10 +304,28 @@ export default function PostPage() {
 
         {/* AI Suggest */}
         <div className="space-y-2">
+          {availableProviders?.length > 1 && (
+            <div className="flex gap-2">
+              {availableProviders.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setSelectedProvider(p)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                    selectedProvider === p
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-violet-400"
+                  }`}
+                >
+                  {p === "anthropic" ? "Claude" : p === "openai" ? "GPT-4o" : "Gemini"}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             onClick={handleAISuggest}
-            disabled={aiLoading || hasAiKey === false}
+            disabled={aiLoading || availableProviders?.length === 0}
             className="w-full bg-gradient-to-r from-violet-500 to-indigo-600 hover:opacity-90 disabled:opacity-60 text-white font-bold py-3.5 rounded-2xl transition-all shadow-sm text-sm flex items-center justify-center gap-2"
           >
             {aiLoading ? (
@@ -309,9 +337,9 @@ export default function PostPage() {
               <>✨ AI Suggest Recipe Details</>
             )}
           </button>
-          {hasAiKey === false && (
+          {availableProviders?.length === 0 && (
             <p className="text-xs text-stone-400 text-center">
-              Add your Anthropic API key in{" "}
+              Add an AI API key in{" "}
               <a href="/auth/settings" className="text-violet-500 font-semibold hover:underline">Settings</a>{" "}
               to use AI suggestions.
             </p>

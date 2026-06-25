@@ -16,7 +16,7 @@ export async function GET() {
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { rows } = await pool.query(
-      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin, anthropic_api_key IS NOT NULL AND anthropic_api_key != '' AS has_anthropic_key FROM users WHERE user_id = $1",
+      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin, anthropic_api_key IS NOT NULL AND anthropic_api_key != '' AS has_anthropic_key, openai_api_key IS NOT NULL AND openai_api_key != '' AS has_openai_key, gemini_api_key IS NOT NULL AND gemini_api_key != '' AS has_gemini_key FROM users WHERE user_id = $1",
       [session.user.id]
     );
     if (!rows[0]) return Response.json({ error: "Not found" }, { status: 404 });
@@ -56,11 +56,18 @@ export async function PUT(req) {
       return Response.json({ url });
     }
 
-    const { firstName, lastName, bio, currentPassword, newPassword, anthropicApiKey } = await req.json();
+    const { firstName, lastName, bio, currentPassword, newPassword, anthropicApiKey, openaiApiKey, geminiApiKey } = await req.json();
 
     if (anthropicApiKey !== undefined) {
-      const key = anthropicApiKey?.trim() || null;
-      await pool.query("UPDATE users SET anthropic_api_key = $1 WHERE user_id = $2", [key, session.user.id]);
+      await pool.query("UPDATE users SET anthropic_api_key = $1 WHERE user_id = $2", [anthropicApiKey?.trim() || null, session.user.id]);
+      return Response.json({ success: true });
+    }
+    if (openaiApiKey !== undefined) {
+      await pool.query("UPDATE users SET openai_api_key = $1 WHERE user_id = $2", [openaiApiKey?.trim() || null, session.user.id]);
+      return Response.json({ success: true });
+    }
+    if (geminiApiKey !== undefined) {
+      await pool.query("UPDATE users SET gemini_api_key = $1 WHERE user_id = $2", [geminiApiKey?.trim() || null, session.user.id]);
       return Response.json({ success: true });
     }
 
