@@ -16,7 +16,7 @@ export async function GET() {
     if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const { rows } = await pool.query(
-      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin, anthropic_api_key IS NOT NULL AND anthropic_api_key != '' AS has_anthropic_key, openai_api_key IS NOT NULL AND openai_api_key != '' AS has_openai_key, gemini_api_key IS NOT NULL AND gemini_api_key != '' AS has_gemini_key FROM users WHERE user_id = $1",
+      "SELECT user_id, first_name, last_name, email, bio, profile_pic, is_admin, phone_number, recovery_email, anthropic_api_key IS NOT NULL AND anthropic_api_key != '' AS has_anthropic_key, openai_api_key IS NOT NULL AND openai_api_key != '' AS has_openai_key, gemini_api_key IS NOT NULL AND gemini_api_key != '' AS has_gemini_key FROM users WHERE user_id = $1",
       [session.user.id]
     );
     if (!rows[0]) return Response.json({ error: "Not found" }, { status: 404 });
@@ -56,8 +56,16 @@ export async function PUT(req) {
       return Response.json({ url });
     }
 
-    const { firstName, lastName, bio, currentPassword, newPassword, anthropicApiKey, openaiApiKey, geminiApiKey } = await req.json();
+    const { firstName, lastName, bio, currentPassword, newPassword, anthropicApiKey, openaiApiKey, geminiApiKey, phoneNumber, recoveryEmail } = await req.json();
 
+    if (phoneNumber !== undefined) {
+      await pool.query("UPDATE users SET phone_number = $1 WHERE user_id = $2", [phoneNumber?.trim() || null, session.user.id]);
+      return Response.json({ success: true });
+    }
+    if (recoveryEmail !== undefined) {
+      await pool.query("UPDATE users SET recovery_email = $1 WHERE user_id = $2", [recoveryEmail?.trim() || null, session.user.id]);
+      return Response.json({ success: true });
+    }
     if (anthropicApiKey !== undefined) {
       await pool.query("UPDATE users SET anthropic_api_key = $1 WHERE user_id = $2", [anthropicApiKey?.trim() || null, session.user.id]);
       return Response.json({ success: true });

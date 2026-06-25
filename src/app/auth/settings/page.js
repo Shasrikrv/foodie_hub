@@ -67,6 +67,12 @@ export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Account Recovery
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [savingRecovery, setSavingRecovery] = useState(null);
+  const [recoveryMsg, setRecoveryMsg] = useState({ phone: "", email: "" });
+
   // AI Settings
   const [aiKeys, setAiKeys] = useState({ anthropic: false, openai: false, gemini: false });
   const [keyInputs, setKeyInputs] = useState({ anthropic: "", openai: "", gemini: "" });
@@ -93,6 +99,8 @@ export default function SettingsPage() {
         setFirstName(data.data.first_name || "");
         setLastName(data.data.last_name || "");
         setBio(data.data.bio || "");
+        setPhoneNumber(data.data.phone_number || "");
+        setRecoveryEmail(data.data.recovery_email || "");
         setAiKeys({ anthropic: !!data.data.has_anthropic_key, openai: !!data.data.has_openai_key, gemini: !!data.data.has_gemini_key });
       } else {
         setProfileError("Could not load profile data. Please refresh.");
@@ -150,6 +158,37 @@ export default function SettingsPage() {
       body: JSON.stringify({ email: session?.user?.email, subject: supportSubject, message: supportMsg }),
     });
     if (res.ok) { setSupportSent(true); setSupportSubject(""); setSupportMsg(""); }
+  };
+
+  const handleSaveRecovery = async (field) => {
+    const isPhone = field === "phone";
+    setSavingRecovery(field);
+    setRecoveryMsg((prev) => ({ ...prev, [field]: "" }));
+    const body = isPhone ? { phoneNumber: phoneNumber.trim() } : { recoveryEmail: recoveryEmail.trim() };
+    const res = await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setSavingRecovery(null);
+    setRecoveryMsg((prev) => ({ ...prev, [field]: res.ok ? "saved" : "error" }));
+  };
+
+  const handleRemoveRecovery = async (field) => {
+    const isPhone = field === "phone";
+    setSavingRecovery(field);
+    setRecoveryMsg((prev) => ({ ...prev, [field]: "" }));
+    const body = isPhone ? { phoneNumber: "" } : { recoveryEmail: "" };
+    const res = await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setSavingRecovery(null);
+    if (res.ok) {
+      if (isPhone) setPhoneNumber(""); else setRecoveryEmail("");
+      setRecoveryMsg((prev) => ({ ...prev, [field]: "removed" }));
+    }
   };
 
   const PROVIDERS = [
@@ -314,6 +353,65 @@ export default function SettingsPage() {
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </form>
+        </div>
+
+        {/* Account Recovery */}
+        <div className="bg-white rounded-3xl shadow-sm border border-stone-100 p-6">
+          <h2 className="font-bold text-stone-800 mb-1">Account Recovery</h2>
+          <p className="text-xs text-stone-400 mb-5">
+            Add a recovery email or phone number so you can still reset your password if you lose access to your account email.
+          </p>
+          <div className="space-y-5">
+
+            {/* Recovery email */}
+            <div>
+              <label className="text-xs font-semibold text-stone-500 block mb-2">Recovery Email</label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={recoveryEmail}
+                  onChange={(e) => setRecoveryEmail(e.target.value)}
+                  placeholder="backup@example.com"
+                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-800 bg-stone-50 focus:outline-none focus:border-orange-400 transition-all"
+                />
+                <button
+                  onClick={() => recoveryEmail ? handleSaveRecovery("email") : handleRemoveRecovery("email")}
+                  disabled={savingRecovery === "email"}
+                  className="bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-white font-semibold px-4 rounded-xl text-sm transition-colors"
+                >
+                  {savingRecovery === "email" ? "…" : recoveryEmail ? "Save" : "Remove"}
+                </button>
+              </div>
+              {recoveryMsg.email === "saved"   && <p className="text-xs text-emerald-600 mt-1.5">Recovery email saved!</p>}
+              {recoveryMsg.email === "removed" && <p className="text-xs text-stone-400 mt-1.5">Recovery email removed.</p>}
+              {recoveryMsg.email === "error"   && <p className="text-xs text-red-500 mt-1.5">Failed to save. Please try again.</p>}
+            </div>
+
+            {/* Phone number */}
+            <div>
+              <label className="text-xs font-semibold text-stone-500 block mb-2">Phone Number</label>
+              <div className="flex gap-2">
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="+1 555 000 0000"
+                  className="flex-1 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-800 bg-stone-50 focus:outline-none focus:border-orange-400 transition-all"
+                />
+                <button
+                  onClick={() => phoneNumber ? handleSaveRecovery("phone") : handleRemoveRecovery("phone")}
+                  disabled={savingRecovery === "phone"}
+                  className="bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-white font-semibold px-4 rounded-xl text-sm transition-colors"
+                >
+                  {savingRecovery === "phone" ? "…" : phoneNumber ? "Save" : "Remove"}
+                </button>
+              </div>
+              <p className="text-xs text-stone-300 mt-1">Use international format, e.g. +1 555 000 0000</p>
+              {recoveryMsg.phone === "saved"   && <p className="text-xs text-emerald-600 mt-1">Phone number saved!</p>}
+              {recoveryMsg.phone === "removed" && <p className="text-xs text-stone-400 mt-1">Phone number removed.</p>}
+              {recoveryMsg.phone === "error"   && <p className="text-xs text-red-500 mt-1">Failed to save. Please try again.</p>}
+            </div>
+          </div>
         </div>
 
         {/* AI Settings */}
